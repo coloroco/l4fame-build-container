@@ -1,6 +1,6 @@
 #!/bin/bash
 apt-get update && apt-get install -y nano git libssl-dev kmod cpio bc uuid-dev pkg-config devscripts build-essential doxygen graphviz dh-exec libselinux-dev autoconf-archive asciidoc libxml2-utils xsltproc docbook-xsl docbook-xml;
-cd tmp;
+cd /tmp;
 mkdir dpkg-build;
 cd dpkg-build;
 git clone https://github.hpe.com/hpelinux/tm-librarian.git && \
