@@ -20,6 +20,7 @@ apt-get update && apt-get install -y \
                                 xsltproc \
                                 docbook-xsl \
                                 docbook-xml;
+
 cd /tmp;
 mkdir dpkg-build;
 cd dpkg-build;
@@ -58,5 +59,4 @@ cd /tmp && rm -rf nvml;
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
 cd linux-l4fame && fakeroot make deb-pkg;
 cd /tmp && cp ./*.deb /deb;
-rm -rf /tmp/*;
 
