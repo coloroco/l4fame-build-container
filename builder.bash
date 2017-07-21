@@ -24,7 +24,7 @@ apt-get update && apt-get install -y \
 cd /tmp;
 mkdir dpkg-build;
 cd dpkg-build;
-git clone https://github.hpe.com/hpelinux/tm-librarian.git && \
+git clone https://github.com/FabricAttachedMemory/tm-librarian.git && \
 cd tm-librarian && dpkg-buildpackage -b -rfakeroot -us -uc;
 cd /tmp;
 git clone https://github.com/FabricAttachedMemory/l4fame-node.git && \
