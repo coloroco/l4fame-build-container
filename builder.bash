@@ -10,9 +10,11 @@ apt-get update && apt-get install -y \
                                 pkg-config \
                                 devscripts \
                                 build-essential \
+                                debhelper \
                                 doxygen \
                                 graphviz \
                                 dh-exec \
+                                dh-python \
                                 libselinux-dev \
                                 autoconf-archive \
                                 asciidoc \
