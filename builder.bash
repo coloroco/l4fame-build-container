@@ -24,6 +24,16 @@ apt-get update && apt-get install -y \
                                 docbook-xml;
 
 cd /tmp;
+
+git clone https://github.com/FabricAttachedMemory/nvml.git && \
+cd nvml && make dpkg;
+cd dpkgbuild/nvml-*;
+mkdir usr && dpkg-buildpackage -b -rfakeroot -us -uc;
+mv debian/tmp/usr/lib64 usr/lib
+dpkg-buildpackage -b -rfakeroot -us -uc;
+cd .. && cp ./*.deb /deb;
+cd /tmp && rm -rf nvml;
+
 mkdir dpkg-build;
 cd dpkg-build;
 git clone https://github.com/FabricAttachedMemory/tm-librarian.git && \
@@ -48,15 +58,6 @@ git clone -b debian https://github.com/FabricAttachedMemory/tm-libfuse.git && \
 cd tm-libfuse && dpkg-buildpackage -b -rfakeroot -us -uc;
 cd /tmp && cp ./*.deb /deb;
 cd /tmp && rm -rf dpkg-build;
-
-git clone https://github.com/FabricAttachedMemory/nvml.git && \
-cd nvml && make dpkg;
-cd dpkgbuild/nvml-*;
-mkdir usr && dpkg-buildpackage -b -rfakeroot -us -uc;
-mv debian/tmp/usr/lib64 usr/lib
-dpkg-buildpackage -b -rfakeroot -us -uc;
-cd .. && cp ./*.deb /deb;
-cd /tmp && rm -rf nvml;
 
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
 cd linux-l4fame && fakeroot make deb-pkg;
