@@ -62,4 +62,5 @@ cd /home && rm -rf dpkg-build;
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
 cd linux-l4fame && fakeroot make deb-pkg;
 cd /home && cp ./*.deb /deb;
+rm -rf linux-l4fame;
 
