@@ -19,11 +19,12 @@ apt-get update && apt-get install -y \
                                 autoconf-archive \
                                 asciidoc \
                                 libxml2-utils \
-                                xsltproc \
+                                xsltproc
                                 docbook-xsl \
                                 docbook-xml;
 
 cd /home;
+rm -rf /home/*;
 
 git clone https://github.com/FabricAttachedMemory/nvml.git && \
 cd nvml && make dpkg;
@@ -37,16 +38,17 @@ cd /home && rm -rf nvml;
 mkdir dpkg-build;
 cd dpkg-build;
 git clone https://github.com/FabricAttachedMemory/tm-librarian.git && \
-cd tm-librarian && dpkg-buildpackage -b -rfakeroot -us -uc;
+cd tm-librarian && dpkg-buildpackage -us -uc;
 cd /home;
 git clone https://github.com/FabricAttachedMemory/l4fame-node.git && \
-cd l4fame-node && dpkg-buildpackage -b -rfakeroot -us -uc;
+cd l4fame-node && dpkg-buildpackage -us -uc;
 cd /home;
 git clone https://github.com/FabricAttachedMemory/l4fame-manager.git && \
-cd l4fame-manager && dpkg-buildpackage -b -rfakeroot -us -uc;
+cd l4fame-manager && dpkg-buildpackage -us -uc;
 cd /home;
-git clone https://github.com/AustinHunting/libfam-atomic.git && \
-cd libfam-atomic && dpkg-buildpackage -b -rfakeroot -us -uc;
+git clone https://github.com/FabricAttachedMemory/libfam-atomic.git deb && \
+git clone -b upstream https://github.com/FabricAttachedMemory/libfam-atomic.git && \
+mv deb/debian libfam-atomic && cd libfam-atomic && dpkg-buildpackage -us -uc;
 cd /home;
 git clone -b debian https://github.com/keith-packard/Emulation.git && \
 cd Emulation && dpkg-buildpackage -b -rfakeroot -us -uc;
