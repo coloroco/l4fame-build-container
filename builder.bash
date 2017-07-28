@@ -29,9 +29,9 @@ rm -rf /home/*;
 git clone https://github.com/FabricAttachedMemory/nvml.git && \
 cd nvml && make dpkg;
 cd dpkgbuild/nvml-*;
-mkdir usr && dpkg-buildpackage -b -rfakeroot -us -uc;
+mkdir usr && dpkg-buildpackage -b -us -uc;
 mv debian/tmp/usr/lib64 usr/lib
-dpkg-buildpackage -b -rfakeroot -us -uc;
+dpkg-buildpackage -b -us -uc;
 cd .. && cp ./*.deb /deb;
 cd /home && rm -rf nvml;
 
@@ -50,14 +50,15 @@ git clone https://github.com/FabricAttachedMemory/libfam-atomic.git deb && \
 git clone -b upstream https://github.com/FabricAttachedMemory/libfam-atomic.git && \
 mv deb/debian libfam-atomic && cd libfam-atomic && dpkg-buildpackage -us -uc;
 cd /home;
-git clone -b debian https://github.com/keith-packard/Emulation.git && \
-cd Emulation && dpkg-buildpackage -b -rfakeroot -us -uc;
+git clone -b debian https://github.com/keith-packard/Emulation.git deb && \
+git clone https://github.com/FabricAttachedMemory/Emulation.git && \
+mv deb/debian Emulation && cd Emulation && dpkg-buildpackage -b -us -uc;
 cd /home;
 git clone -b debian https://github.com/FabricAttachedMemory/tm-hello-world.git && \
-cd tm-hello-world && dpkg-buildpackage -b -rfakeroot -us -uc;
+cd tm-hello-world && dpkg-buildpackage -b -us -uc;
 cd /home;
 git clone -b debian https://github.com/FabricAttachedMemory/tm-libfuse.git && \
-cd tm-libfuse && dpkg-buildpackage -b -rfakeroot -us -uc;
+cd tm-libfuse && dpkg-buildpackage -b -us -uc;
 cd /home && cp ./*.deb /deb;
 cd /home && rm -rf dpkg-build;
 
