@@ -30,7 +30,7 @@ git clone https://github.com/FabricAttachedMemory/nvml.git && \
 cd nvml && make dpkg;
 cd dpkgbuild/nvml-*;
 mkdir usr && dpkg-buildpackage -b -us -uc;
-mv debian/tmp/usr/lib64 usr/lib
+mv debian/tmp/usr/lib64 usr/lib;
 dpkg-buildpackage -b -us -uc;
 cd .. && cp ./*.deb /deb;
 cd /home && rm -rf nvml;
