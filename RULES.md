@@ -13,4 +13,4 @@ Each package referenced in builder.bash can be built individually using the foll
 | tm-hello-world | build-essential debhelper | `dpkg-buildpackage -b -us -uc` | Clone the debian branch. |
 | tm-libfuse | build-essential dh-autoreconf libselinux-dev | `dpkg-buildpackage -b -us -uc` | Clone the debian branch. |
 | nvml | build-essential pkg-config devscripts doxygen make | `make dpkg && dpkg-buildpackage -b -us -uc` | Run make dpkg, expect it to fail. cd into dpkgbuild/nvml-*, and build with "dpkg-buildpackage -b -us -uc" expect it to fail. Run "mkdir usr", move debian/tmp/usr/lib64 to usr/lib. Then run "dpkg-buildpackage -b -us -uc" again. |
-| linux-l4fame | make gcc bc libssl-dev | `make deb-pkg` | none |
+| linux-l4fame | make gcc bc libssl-dev xz-utils | `make deb-pkg` | none |
