@@ -6,6 +6,7 @@ apt-get update && apt-get install -y \
                                 kmod \
                                 cpio \
                                 bc \
+                                dpkg-dev \
                                 uuid-dev \
                                 pkg-config \
                                 devscripts \
