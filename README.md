@@ -43,6 +43,9 @@ docker run -t --name l4fame-builder -v ~/builder:/home -v /home/deb:/deb austinh
 
 docker run -t --name l4fame-builder -v ~/builder:/home -v /home/deb:/deb austinhpe/l4fame-build-container-large
 ```
+To disconnect from the container without killing it run `Ctrl+C`
+
+To reconnect to the container run `docker attach l4fame-builder`
 
 | Docker Flag | Explanation |
 | ----------- | ----------- |
@@ -51,9 +54,6 @@ docker run -t --name l4fame-builder -v ~/builder:/home -v /home/deb:/deb austinh
 | -v ~/builder:/home | Mounts a folder to hold packages and temporary files as they are being built |
 | -v /home/deb:/deb | Mounts a folder to store the finished packages |
 
-To disconnect from the container without killing it run `Ctrl+C`
-
-To reconnect to the container run `docker attach l4fame-builder`
 
 ### End Results
 
