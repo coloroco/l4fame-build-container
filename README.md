@@ -30,7 +30,7 @@ docker pull austinhpe/l4fame-build-container-large
 ```
 
 
-## Launching Docker Image
+## Launching the Docker Image
 
 Once the Docker image has been built or downloaded it needs to be run with:
 
@@ -58,6 +58,11 @@ To reconnect to the container run `docker attach l4fame-builder`
 ### End Results
 
 On completion /home/deb should contain all the packages necessary for running code on The Machine.
+
+
+## Building Individual Packages
+
+Instructions for building individual packages can be found [here](BuildRules.md)
 
 
 ## External Links
