@@ -43,9 +43,9 @@ docker run -t --name l4fame-builder -v ~/builder:/home -v /home/deb:/deb austinh
 
 docker run -t --name l4fame-builder -v ~/builder:/home -v /home/deb:/deb austinhpe/l4fame-build-container-large
 ```
-This will start the l4fame build container and attach a pseudo-tty.
-To disconnect from the pseudo-tty run `Ctrl+C`
-To reconnect to the pseudo-tty run `docker attach l4fame-builder`
+To disconnect from the container without killing it run `Ctrl+C`
+
+To reconnect to the container run `docker attach l4fame-builder`
 
 | Docker Flag | Explanation |
 | ----------- | ----------- |
