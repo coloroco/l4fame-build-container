@@ -52,7 +52,7 @@ To reconnect to the container run `docker attach l4fame-builder`
 | -t | Allocate and attach a pseudo-tty, this allows us to background the container without killing it |
 | --name l4fame-builder | Names the container "l4fame-builder" to simplify subsequent runs  |
 | -v ~/builder:/home | Mounts a folder to hold packages and temporary files as they are being built |
-| -v /home/deb:/deb | Mounts a folder to store the finished packages |
+| -v ~/deb:/deb | Mounts a folder to store the finished packages |
 
 
 ### End Results
