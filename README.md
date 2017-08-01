@@ -62,7 +62,7 @@ On completion /home/deb should contain all the packages necessary for running co
 
 ## Building Individual Packages
 
-Instructions for building individual packages can be found [here](BuildRules.md)
+Instructions for building individual packages can be found **[here](BuildRules.md)**
 
 
 ## External Links
