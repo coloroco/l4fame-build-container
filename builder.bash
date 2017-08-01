@@ -1,29 +1,31 @@
 #!/bin/bash
-apt-get update && apt-get install -y \
-                                nano \
-                                git \
-                                libssl-dev \
-                                kmod \
-                                cpio \
-                                bc \
-                                dpkg-dev \
-                                uuid-dev \
-                                pkg-config \
-                                devscripts \
-                                build-essential \
-                                debhelper \
-                                doxygen \
-                                graphviz \
-                                dh-exec \
-                                dh-python \
-                                libselinux-dev \
-                                autoconf-archive \
-                                asciidoc \
-                                libxml2-utils \
-                                xsltproc
-                                docbook-xsl \
-                                docbook-xml \
-                                xz-utils;
+apt-get update && \
+apt-get upgrade -y && \
+apt-get install -y \
+                nano \
+                git \
+                libssl-dev \
+                kmod \
+                cpio \
+                bc \
+                dpkg-dev \
+                uuid-dev \
+                pkg-config \
+                devscripts \
+                build-essential \
+                debhelper \
+                doxygen \
+                graphviz \
+                dh-exec \
+                dh-python \
+                libselinux-dev \
+                autoconf-archive \
+                asciidoc \
+                libxml2-utils \
+                xsltproc
+                docbook-xsl \
+                docbook-xml \
+                xz-utils;
 
 cd /home;
 
