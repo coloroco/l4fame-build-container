@@ -37,15 +37,15 @@ Once the Docker image has been built or downloaded it needs to be run with:
 (depending on the method used to acquire the Docker image)
 
 ```
-docker run --rm -v /builder:/home -v /home/deb:/deb l4fame-build-container
+docker run --name l4fame-builder -v /builder:/home -v /home/deb:/deb l4fame-build-container
 
-docker run --rm -v /builder:/home -v /home/deb:/deb austinhpe/l4fame-build-container
+docker run --name l4fame-builder -v /builder:/home -v /home/deb:/deb austinhpe/l4fame-build-container
 
-docker run --rm -v /builder:/home -v /home/deb:/deb austinhpe/l4fame-build-container-large
+docker run --name l4fame-builder -v /builder:/home -v /home/deb:/deb austinhpe/l4fame-build-container-large
 ```
 | Docker Flag | Explanation |
 | ----------- | ----------- |
-| --rm | Removes the container after completion to reduce disk usage |
+| --name l4fame-builder | Names the container "l4fame-builder" to simplify subsequent runs  |
 | -v /builder:/home | Mounts a folder to hold packages and temporary files as they are being built |
 | -v /home/deb:/deb | Mounts a folder to store the finished packages |
 
