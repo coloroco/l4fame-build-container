@@ -24,7 +24,10 @@ apt-get install -y \
                 xsltproc
                 docbook-xsl \
                 docbook-xml \
-                xz-utils;
+                xz-utils \
+                dh-python \
+                python-all;
+
 
 cd /home;
 
@@ -67,6 +70,10 @@ git clone -b debian https://github.com/keith-packard/Emulation.git Emulation-deb
 ( cd Emulation-deb && git pull );
 ( cd Emulation && set -- `git pull` && [ "$1" == "Updating" ] && \
         ( cp -r Emulation-deb/debian Emulation && cd Emulation && dpkg-buildpackage -b -us -uc ) );
+
+git clone https://github.com/FabricAttachedMemory/tm-manifesting.git && \
+( cd tm-manifesting && dpkg-buildpackage -b -us -uc ) || \
+( cd tm-manifesting && set -- `git pull` && [ "$1" == "Updating" ] && dpkg-buildpackage -b -us -uc );
 
 cp /home/*.deb /deb;
 
