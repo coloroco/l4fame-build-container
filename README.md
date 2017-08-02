@@ -57,7 +57,7 @@ To reconnect to the container run `docker attach l4fame-builder`
 
 ### End Results
 
-On completion /home/deb should contain all the packages necessary for running code on The Machine.
+On completion ~/deb should contain all the packages necessary for running code on The Machine.
 
 
 ## Building Individual Packages

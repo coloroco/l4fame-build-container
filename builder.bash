@@ -73,5 +73,5 @@ git clone https://github.com/FabricAttachedMemory/linux-l4fame.git || \
 ( cd linux-l4fame && make deb-pkg );
 
 mv /home/*.deb /deb;
-rm -rf linux-l4fame;
+
 
