@@ -21,7 +21,7 @@ apt-get install -y \
                 autoconf-archive \
                 asciidoc \
                 libxml2-utils \
-                xsltproc
+                xsltproc \
                 docbook-xsl \
                 docbook-xml \
                 xz-utils \
