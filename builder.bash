@@ -28,7 +28,7 @@ apt-get install -y \
                 dh-python \
                 python-all;
 
-
+mkdir /deb;
 cd /home;
 
 rm -rf nvml && git clone https://github.com/FabricAttachedMemory/nvml.git;
