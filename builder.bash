@@ -69,19 +69,19 @@ git clone -b debian https://github.com/FabricAttachedMemory/tm-libfuse.git && \
 ( cd tm-libfuse && dpkg-buildpackage --jobs=$CORES -b -us -uc ) || \
 ( cd tm-libfuse && set -- `git pull` && [ "$1" == "Updating" ] && dpkg-buildpackage --jobs=$CORES -b -us -uc );
 
-git clone -b upstream https://github.com/FabricAttachedMemory/libfam-atomic.git || \
-( cd libfam-atomic && git pull );
 git clone https://github.com/FabricAttachedMemory/libfam-atomic.git atomic-deb || \
 ( cd atomic-deb && git pull );
-( cd libfam-atomic && set -- `git pull` && [ "$1" == "Updating" ] && \
-        ( cp -r atomic-deb/debian libfam-atomic && cd libfam-atomic && dpkg-buildpackage --jobs=$CORES -us -uc ) );
+git clone -b upstream https://github.com/FabricAttachedMemory/libfam-atomic.git && \
+( cp -r atomic-deb/debian libfam-atomic && cd libfam-atomic && dpkg-buildpackage --jobs=$CORES -us -uc ) || \
+( cp -r atomic-deb/debian libfam-atomic && cd libfam-atomic && set -- `git pull` && [ "$1" == "Updating" ] && \
+        ( dpkg-buildpackage --jobs=$CORES -us -uc ) );
 
-git clone https://github.com/FabricAttachedMemory/Emulation.git || \
-( cd Emulation && git pull );
 git clone -b debian https://github.com/keith-packard/Emulation.git Emulation-deb || \
 ( cd Emulation-deb && git pull );
-( cd Emulation && set -- `git pull` && [ "$1" == "Updating" ] && \
-        ( cp -r Emulation-deb/debian Emulation && cd Emulation && dpkg-buildpackage --jobs=$CORES -b -us -uc ) );
+git clone https://github.com/FabricAttachedMemory/Emulation.git && \
+( cp -r Emulation-deb/debian Emulation && cd Emulation && dpkg-buildpackage --jobs=$CORES -b -us -uc ) || \
+( cp -r Emulation-deb/debian Emulation && cd Emulation && set -- `git pull` && [ "$1" == "Updating" ] && \
+        ( dpkg-buildpackage --jobs=$CORES -b -us -uc ) );
 
 git clone https://github.com/FabricAttachedMemory/tm-manifesting.git && \
 ( cd tm-manifesting && dpkg-buildpackage --jobs=$CORES -b -us -uc ) || \
