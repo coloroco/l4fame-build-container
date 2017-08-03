@@ -41,7 +41,6 @@ Once the Docker image has been built or downloaded it needs to be run with:
 docker run -t --name l4fame-builder -v ~/builder:/home -v ~/deb:/deb l4fame-build-container
 
 docker run -t --name l4fame-builder -v ~/builder:/home -v ~/deb:/deb austinhpe/l4fame-build-container
-
 ```
 To disconnect from the container without killing it run `Ctrl+C`
 
