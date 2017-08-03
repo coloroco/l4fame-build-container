@@ -2,6 +2,13 @@
 
 This repository contains a bash script and Dockerfile that will pull and build the Fabric Attached Memory packages necessary for running code on The Machine.
 
+### Known Working Environments
+This build container has been tested and verified working on the following operating systems :
+- Red Hat Enterprise Linux 7.3
+- Ubuntu 17.04
+- Fedora 26
+- Debian Jessie
+
 ## Getting Started
 
 This repository can be cloned and built, or a complete image can be downloaded off Dockerhub.
