@@ -98,7 +98,7 @@ git clone -b upstream https://github.com/FabricAttachedMemory/libfam-atomic.git 
     check_build_error; ); ) || \
 ( cp -r atomic-deb/debian libfam-atomic && cd libfam-atomic && set -- `git pull` && [ "$1" == "Updating" ] && \
         ( dpkg-buildpackage --jobs=$CORES -us -uc;
-            check_build_error; ) );
+            check_build_error; ); );
 
 git clone -b debian https://github.com/keith-packard/Emulation.git Emulation-deb || \
 ( cd Emulation-deb && git pull );
@@ -107,7 +107,7 @@ git clone https://github.com/FabricAttachedMemory/Emulation.git && \
     check_build_error; ); ) || \
 ( cp -r Emulation-deb/debian Emulation && cd Emulation && set -- `git pull` && [ "$1" == "Updating" ] && \
         ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
-            check_build_error; ) );
+            check_build_error; ); );
 
 git clone https://github.com/FabricAttachedMemory/tm-manifesting.git && \
 ( cd tm-manifesting && ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
