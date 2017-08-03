@@ -44,7 +44,8 @@ check_build_error () {
 }
 
 mkdir /deb;
-cd /home;
+mkdir /build;
+cd /build;
 
 git clone https://github.com/FabricAttachedMemory/nvml.git && \
 (   ( cd nvml && make -j $CORES dpkg );
@@ -115,7 +116,7 @@ git clone https://github.com/FabricAttachedMemory/tm-manifesting.git && \
 ( cd tm-manifesting && set -- `git pull` && [ "$1" == "Updating" ] && ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
     check_build_error; ); );
 
-cp /home/*.deb /deb;
+cp /build/*.deb /deb;
 
 
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
@@ -124,5 +125,5 @@ git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
 ( cd linux-l4fame && set -- `git pull` && [ "$1" == "Updating" ] && ( make -j $CORES deb-pkg;
     check_build_error; ); );
 
-cp /home/*.deb /deb;
+cp /build/*.deb /deb;
 
