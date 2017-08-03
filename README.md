@@ -24,16 +24,10 @@ cd l4fame-build-container && docker build -t l4fame-build-container .
 
 ### Pull from Dockerhub
 
-Pull the prebuilt image from Dockerhub. Two images are available:
+Pull the prebuilt image from Dockerhub.
 
 ```
 docker pull austinhpe/l4fame-build-container
-```
-
-or (the large build container comes with all prerequisites already installed)
-
-```
-docker pull austinhpe/l4fame-build-container-large
 ```
 
 
@@ -75,7 +69,6 @@ Instructions for building individual packages can be found **[here](BuildRules.m
 ## External Links
 
 * [l4fame-build-container](https://hub.docker.com/r/austinhpe/l4fame-build-container/) - Dockerhub image for the build container
-* [l4fame-build-container-large](https://hub.docker.com/r/austinhpe/l4fame-build-container-large/) - Dockerhub image for the large build container
 * [debserve](https://hub.docker.com/r/davidpatawaran/debserve/) - Dockerhub image for debserve
 
 ## License
