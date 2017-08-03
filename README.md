@@ -47,7 +47,6 @@ To disconnect from the container without killing it run `Ctrl+C`
 To reconnect to the container run `docker attach l4fame-builder`
 
 
-
 | Docker Flag | Explanation |
 | ----------- | ----------- |
 | -t | Allocate and attach a pseudo-tty, this allows us to background the container without killing it |

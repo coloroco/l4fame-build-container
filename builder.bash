@@ -24,18 +24,24 @@ apt-get install -y \
                 xsltproc \
                 docbook-xsl \
                 docbook-xml \
-                xz-utils \
                 dh-python \
                 python-all;
 
 mkdir /deb;
 cd /home;
 
-rm -rf nvml && git clone https://github.com/FabricAttachedMemory/nvml.git;
-( cd nvml && make dpkg );
-( cd nvml/dpkgbuild/nvml-* && mkdir usr && dpkg-buildpackage -b -us -uc;
-mv debian/tmp/usr/lib64 usr/lib && dpkg-buildpackage -b -us -uc;
-cd .. && cp ./*.deb /deb );
+git clone https://github.com/FabricAttachedMemory/nvml.git && \
+(   ( cd nvml && make dpkg );
+    ( cd nvml/dpkgbuild/nvml-* && mkdir usr && dpkg-buildpackage -b -us -uc;
+    mv debian/tmp/usr/lib64 usr/lib && dpkg-buildpackage -b -us -uc;
+    cd .. && cp ./*.deb /deb );
+) || \
+( cd nvml && set -- `git pull` && [ "$1" == "Updating" ] && \
+    ( make dpkg;
+    ( cd dpkgbuild/nvml-* && mkdir usr && dpkg-buildpackage -b -us -uc;
+    mv debian/tmp/usr/lib64 usr/lib && dpkg-buildpackage -b -us -uc;
+    cd .. && cp ./*.deb /deb );
+) );
 
 git clone https://github.com/FabricAttachedMemory/tm-librarian.git && \
 ( cd tm-librarian && dpkg-buildpackage -us -uc ) || \
@@ -76,6 +82,7 @@ git clone https://github.com/FabricAttachedMemory/tm-manifesting.git && \
 ( cd tm-manifesting && set -- `git pull` && [ "$1" == "Updating" ] && dpkg-buildpackage -b -us -uc );
 
 cp /home/*.deb /deb;
+
 
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
 ( cd linux-l4fame && make deb-pkg ) || \
