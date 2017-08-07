@@ -100,7 +100,7 @@ git clone -b upstream https://github.com/FabricAttachedMemory/libfam-atomic.git 
         ( dpkg-buildpackage --jobs=$CORES -us -uc;
             check_build_error; ); );
 
-git clone -b debian https://github.com/keith-packard/Emulation.git Emulation-deb || \
+git clone -b debian https://github.com/FabricAttachedMemory/Emulation.git Emulation-deb || \
 ( cd Emulation-deb && git pull );
 git clone https://github.com/FabricAttachedMemory/Emulation.git && \
 ( cp -r Emulation-deb/debian Emulation && cd Emulation && ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
