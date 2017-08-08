@@ -50,16 +50,14 @@ git clone https://github.com/FabricAttachedMemory/nvml.git && \
 (   ( cd nvml && make -j $CORES dpkg );
     ( cd nvml/dpkgbuild/nvml-* && mkdir usr && dpkg-buildpackage --jobs=$CORES -b -us -uc;
     mv debian/tmp/usr/lib64 usr/lib && ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
-        check_build_error; );
-    cd .. && cp ./*.deb /deb );
+        check_build_error; ); cp ../*.deb /deb );
 ) || \
 ( cd nvml && set -- `git pull` && [ "$1" == "Updating" ] && \
     ( make -j $CORES dpkg;
     ( cd dpkgbuild/nvml-* && mkdir usr && dpkg-buildpackage --jobs=$CORES -b -us -uc;
     mv debian/tmp/usr/lib64 usr/lib && ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
-        check_build_error; );
-    cd .. && cp ./*.deb /deb );
-) );
+        check_build_error; ); cp ../*.deb /deb );
+) || ( cp dpkgbuild/*.deb /deb ); );
 
 git clone https://github.com/FabricAttachedMemory/tm-librarian.git && \
 ( cd tm-librarian && ( dpkg-buildpackage --jobs=$CORES -us -uc;
