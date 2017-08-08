@@ -25,7 +25,7 @@ apt-get install -y \
                 dh-python \
                 python-all;
 
-# If user sets "-e cores=<number>" use that many cores to compile
+# If user sets "-e cores=number_of_cores" use that many cores to compile
 if [ "$cores" ]; then
     CORES=$(( $cores ))
 # Set $CORES to half the cpu cores, capped at 8
@@ -52,13 +52,13 @@ mkdir /build;
 cd /build;
 
 git clone https://github.com/FabricAttachedMemory/nvml.git && \
-(   ( cd nvml && make -j $CORES dpkg );
+(   ( cd nvml && make -j $CORES BUILD_PACKAGE_CHECK=n dpkg );
     ( cd nvml/dpkgbuild/nvml-* && mkdir usr && mv debian/tmp/usr/lib64 usr/lib && \
         ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
         check_build_error; ); cp ../*.deb /deb );
 ) || \
 ( cd nvml && set -- `git pull` && [ "$1" == "Updating" ] && \
-    ( make -j $CORES dpkg;
+    ( rm -rf dpkgbuild && make -j $CORES BUILD_PACKAGE_CHECK=n dpkg;
     ( cd dpkgbuild/nvml-* && mkdir usr && mv debian/tmp/usr/lib64 usr/lib && \
         ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
         check_build_error; ); cp ../*.deb /deb );
