@@ -53,14 +53,14 @@ cd /build;
 
 git clone https://github.com/FabricAttachedMemory/nvml.git && \
 (   ( cd nvml && make -j $CORES dpkg );
-    ( cd nvml/dpkgbuild/nvml-* && mkdir usr && dpkg-buildpackage --jobs=$CORES -b -us -uc;
-    mv debian/tmp/usr/lib64 usr/lib && ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
+    ( cd nvml/dpkgbuild/nvml-* && mkdir usr && mv debian/tmp/usr/lib64 usr/lib && \
+        ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
         check_build_error; ); cp ../*.deb /deb );
 ) || \
 ( cd nvml && set -- `git pull` && [ "$1" == "Updating" ] && \
     ( make -j $CORES dpkg;
-    ( cd dpkgbuild/nvml-* && mkdir usr && dpkg-buildpackage --jobs=$CORES -b -us -uc;
-    mv debian/tmp/usr/lib64 usr/lib && ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
+    ( cd dpkgbuild/nvml-* && mkdir usr && mv debian/tmp/usr/lib64 usr/lib && \
+        ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
         check_build_error; ); cp ../*.deb /deb );
 ) || ( cp dpkgbuild/*.deb /deb ); );
 
