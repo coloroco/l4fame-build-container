@@ -50,11 +50,11 @@ To reconnect to the container run `docker attach l4fame-builder`
 
 | Docker Flag | Explanation |
 | ----------- | ----------- |
-| `-t` | Allocate and attach a pseudo-tty, this allows us to background the container without killing it |
-| `--name l4fame-builder` | Names the container "l4fame-builder" to simplify subsequent runs  |
-| `-v BUILD:/build` | Creates a new Docker volume named BUILD to hold packages and temporary files as they are being built |
-| `-v ~/deb:/deb` | Mounts a folder to store the finished packages |
-| `-e cores=#_of_cores` | **Optional Flag** Sets the number of cores used to compile packages when #_of_cores is an integer value. If this flag is left off the container will automatically use half the available cpu cores capped at 8. |
+| `-t` | Allocates and attaches a pseudo-tty, this allows us to background the container without killing it. |
+| `--name l4fame-builder` | Names the container "l4fame-builder" to simplify subsequent runs. |
+| `-v BUILD:/build` | Creates a new Docker volume named BUILD to hold packages and temporary files as they are being built. |
+| `-v ~/deb:/deb` | Mounts a folder to store the finished packages. |
+| `-e cores=number_of_cores` | **Optional Flag** Sets the number of cores used to compile packages. Replace `number_of_cores` with an integer value. If this flag is left off the container will automatically use half the available cpu cores capped at 8. |
 
 
 ### End Results
