@@ -49,10 +49,10 @@ To reconnect to the container run `docker attach l4fame-builder`
 
 | Docker Flag | Explanation |
 | ----------- | ----------- |
-| -t | Allocate and attach a pseudo-tty, this allows us to background the container without killing it |
-| --name l4fame-builder | Names the container "l4fame-builder" to simplify subsequent runs  |
-| -v BUILD:/build | Creates a new Docker volume named BUILD to hold packages and temporary files as they are being built |
-| -v ~/deb:/deb | Mounts a folder to store the finished packages |
+| `-t` | Allocate and attach a pseudo-tty, this allows us to background the container without killing it |
+| `--name l4fame-builder` | Names the container "l4fame-builder" to simplify subsequent runs  |
+| `-v BUILD:/build` | Creates a new Docker volume named BUILD to hold packages and temporary files as they are being built |
+| `-v ~/deb:/deb` | Mounts a folder to store the finished packages |
 
 
 ### End Results
