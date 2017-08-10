@@ -30,10 +30,10 @@ if [ "$cores" ]; then
     CORES=$(( $cores ))
 # Set $CORES to half the cpu cores, capped at 8
 else
-    if [ $(( $(( $((`cat /proc/cpuinfo | grep processor | wc -l`)) + 1 )) / 2 )) -gt "8" ];
+    if [ $(( ( `nproc` + 1 ) / 2 )) -gt "8" ];
         then CORES=8
     else
-        CORES=$(( $(( $((`cat /proc/cpuinfo | grep processor | wc -l`)) + 1 )) / 2 ))
+        CORES=$(( ( `nproc` + 1 ) / 2 ))
     fi
 fi
 
