@@ -47,19 +47,19 @@ check_build_error () {
     fi
 }
 
-mkdir /deb;
-mkdir /build;
+mkdir -p /deb;
+mkdir -p /build;
 cd /build;
 
 git clone https://github.com/FabricAttachedMemory/nvml.git && \
 (   ( cd nvml && make -j $CORES BUILD_PACKAGE_CHECK=n dpkg );
-    ( cd nvml/dpkgbuild/nvml-* && mkdir usr && mv debian/tmp/usr/lib64 usr/lib && \
+    ( cd nvml/dpkgbuild/nvml-* && mkdir -p usr && mv debian/tmp/usr/lib64 usr/lib && \
         ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
         check_build_error; ); cp ../*.deb /deb );
 ) || \
 ( cd nvml && set -- `git pull` && [ "$1" == "Updating" ] && \
     ( rm -rf dpkgbuild && make -j $CORES BUILD_PACKAGE_CHECK=n dpkg;
-    ( cd dpkgbuild/nvml-* && mkdir usr && mv debian/tmp/usr/lib64 usr/lib && \
+    ( cd dpkgbuild/nvml-* && mkdir -p usr && mv debian/tmp/usr/lib64 usr/lib && \
         ( dpkg-buildpackage --jobs=$CORES -b -us -uc;
         check_build_error; ); cp ../*.deb /deb );
 ) || ( cp dpkgbuild/*.deb /deb ); );
