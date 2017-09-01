@@ -36,8 +36,36 @@ run_update () {
 run_builder () {
     ( git checkout debian );
     ( run_update );
-    ( gbp buildpackage $* );
+    ( gbp buildpackage "$*" );
 }
+
+# Builds a new debian/rules file for nvml
+fix_nvml_rules () {
+read -r -d '' rule<<"EOF"
+#!/usr/bin/make -f
+%:
+\tdh \$@
+
+override_dh_auto_install:
+\tdh_auto_install -- prefix=/usr
+
+override_dh_install:
+\tmkdir -p debian/tmp/usr/share/nvml/
+\tcp utils/nvml.magic debian/tmp/usr/share/nvml/
+\tmv debian/tmp/usr/lib64 debian/tmp/usr/lib
+\tdh_install
+
+override_dh_auto_test:
+\techo "We do not test this code yet."
+
+override_dh_clean:
+\tfind src/ -name 'config.status' -delete
+\tfind src/ -name 'config.log' -delete
+\tdh_clean
+EOF
+echo -e "$rule" > /tmp/rules
+}
+
 
 # If user sets "-e cores=number_of_cores" use that many cores to compile
 if [ "$cores" ]; then
@@ -58,25 +86,10 @@ cd /build;
 
 set_config_files;
 
-# Old pathway
+# git checkout debian && apply new rules file && --git-prebuild='mv /tmp/rules debian/rules'
 git clone https://github.com/FabricAttachedMemory/nvml.git && \
-(   ( cd nvml && make -j $CORES BUILD_PACKAGE_CHECK=n dpkg );
-    ( cd nvml/dpkgbuild/nvml-* && run_update );
-    ( cd nvml && rm -rf dpkgbuild && make -j $CORES BUILD_PACKAGE_CHECK=n dpkg );
-    ( cd nvml/dpkgbuild/nvml-* && mkdir -p usr && mv debian/tmp/usr/lib64 usr/lib && \
-        ( run_update;
-        dpkg-buildpackage --jobs=$CORES -b -us -uc;
-        check_build_error; ); cp ../*.deb /deb );
-) || \
-( cd nvml && set -- `git pull` && [ "$1" == "Updating" ] && \
-    ( ( cd nvml/dpkgbuild/nvml-* && run_update );
-    ( rm -rf dpkgbuild && make -j $CORES BUILD_PACKAGE_CHECK=n dpkg;
-    ( cd dpkgbuild/nvml-* && mkdir -p usr && mv debian/tmp/usr/lib64 usr/lib && \
-        ( run_update;
-        dpkg-buildpackage --jobs=$CORES -b -us -uc;
-        check_build_error; ); cp ../*.deb /deb );
-) ) || ( cp dpkgbuild/*.deb /deb ); );
-
+    ( cd nvml && git checkout upstream && fix_nvml_rules && run_builder --git-prebuild='mv /tmp/rules debian/rules' ) || \
+    ( cd nvml && git checkout upstream && fix_nvml_rules && set -- `git pull` && [ "$1" == "Updating" ] && run_builder --git-prebuild='mv /tmp/rules debian/rules' )
 
 # git checkout debian && run_builder
 git clone https://github.com/keith-packard/tm-librarian.git && \
@@ -124,10 +137,8 @@ cp /build-area/*.deb /deb;
 
 # Old pathway
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
-( cd linux-l4fame && ( make -j $CORES deb-pkg;
-    check_build_error; ); ) || \
-( cd linux-l4fame && set -- `git pull` && [ "$1" == "Updating" ] && ( make -j $CORES deb-pkg;
-    check_build_error; ); );
+    ( cd linux-l4fame && make -j $CORES deb-pkg || \
+    ( cd linux-l4fame && set -- `git pull` && [ "$1" == "Updating" ] && make -j $CORES deb-pkg );
 cp /build/*.deb /deb;
 
 
