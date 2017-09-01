@@ -64,6 +64,7 @@ override_dh_clean:
 \tdh_clean
 EOF
 echo -e "$rule" > /tmp/rules
+chmod +x /tmp/rules
 }
 
 
