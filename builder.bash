@@ -137,8 +137,7 @@ cp /build-area/*.deb /deb;
 
 # Old pathway
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
-    ( cd linux-l4fame && make -j $CORES deb-pkg || \
+    ( cd linux-l4fame && make -j $CORES deb-pkg ) || \
     ( cd linux-l4fame && set -- `git pull` && [ "$1" == "Updating" ] && make -j $CORES deb-pkg );
 cp /build/*.deb /deb;
-
 
