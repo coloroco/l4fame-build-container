@@ -97,7 +97,6 @@ git clone -b debian https://github.com/keith-packard/tm-librarian.git && \
     ( cd tm-librarian && git checkout upstream && run_builder ) || \
     ( cd tm-librarian && git checkout upstream && set -- `git pull` && [ "$1" == "Updating" ] && run_builder )
 
-
 # run_builder && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
 git clone https://github.com/keith-packard/tm-manifesting.git && \
     ( cd tm-manifesting && run_builder --git-upstream-branch=master --git-upstream-tree=branch ) || \
