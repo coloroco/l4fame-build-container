@@ -92,10 +92,10 @@ git clone https://github.com/FabricAttachedMemory/nvml.git && \
     ( cd nvml && git checkout upstream && fix_nvml_rules && run_builder --git-prebuild='mv /tmp/rules debian/rules' ) || \
     ( cd nvml && git checkout upstream && fix_nvml_rules && set -- `git pull` && [ "$1" == "Updating" ] && run_builder --git-prebuild='mv /tmp/rules debian/rules' )
 
-# git checkout debian && run_builder
-git clone https://github.com/keith-packard/tm-librarian.git && \
-    ( cd tm-librarian && run_builder ) || \
-    ( cd tm-librarian && set -- `git pull` && [ "$1" == "Updating" ] && run_builder )
+# git checkout upstream && git checkout debian && run_builder
+git clone -b debian https://github.com/keith-packard/tm-librarian.git && \
+    ( cd tm-librarian && git checkout upstream && run_builder ) || \
+    ( cd tm-librarian && git checkout upstream && set -- `git pull` && [ "$1" == "Updating" ] && run_builder )
 
 
 # run_builder && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
