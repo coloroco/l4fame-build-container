@@ -37,6 +37,17 @@ run_builder () {
     ( git checkout debian );
     ( run_update );
     ( gbp buildpackage "$*" );
+    ( check_failure );
+}
+
+# prints an error message if a build fails
+check_failure () {
+    if [ "$?" ]; then
+        echo "BUILD FAILURE"
+        pwd
+        echo "Trying again"
+        gbp buildpackage "$*"
+    fi
 }
 
 # Builds a new debian/rules file for nvml
