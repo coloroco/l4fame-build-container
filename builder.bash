@@ -37,7 +37,7 @@ run_builder () {
     ( git checkout debian );
     ( run_update );
     ( gbp buildpackage "$*" );
-    ( check_failure );
+    ( check_failure "$*" );
 }
 
 # prints an error message if a build fails
