@@ -109,8 +109,8 @@ git clone -b debian https://github.com/keith-packard/tm-librarian.git && \
 
 # run_builder && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
 git clone https://github.com/keith-packard/tm-manifesting.git && \
-    ( cd tm-manifesting && git checkout upstream && run_builder --git-upstream-branch=master --git-upstream-tree=branch ) || \
-    ( cd tm-manifesting && git checkout upstream && set -- `git pull` && [ "$1" == "Updating" ] && run_builder --git-upstream-branch=master --git-upstream-tree=branch )
+    ( cd tm-manifesting && run_builder --git-upstream-branch=master --git-upstream-tree=branch ) || \
+    ( cd tm-manifesting && set -- `git pull` && [ "$1" == "Updating" ] && run_builder --git-upstream-branch=master --git-upstream-tree=branch )
 
 # git checkout debian && run_builder
 git clone https://github.com/FabricAttachedMemory/l4fame-node.git && \
