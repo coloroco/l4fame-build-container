@@ -96,7 +96,7 @@ gbp buildpackage --git-prebuild='mv /tmp/rules debian/rules'
 dh-exec
 ```
 **Build Process**
-1. Clone [this repository](https://github.com/keith-packard/tm-librarian.git).
+1. Clone [this repository](https://github.com/FabricAttachedMemory/tm-librarian.git).
 2. Checkout `upstream`, then checkout `debian`.
 3. Build with 
 ```shell
