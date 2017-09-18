@@ -44,7 +44,8 @@ dch = False
 ### nvml
 **Packages**
 ```shell
-libpmem_[version].deb libpmem-dev_[version].deb
+libpmem_[version].deb 
+libpmem-dev_[version].deb
 ```
 **Build Requirements** 
 ```shell
