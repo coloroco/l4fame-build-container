@@ -29,19 +29,19 @@ dch = False
 
 ---
 ### Packages
-  * [nvml, libpmem, libpmem-dev](#nvml--libpmem--libpmem-dev)
-  * [tm-librarian, python3-tm-librarian, tm-lfs, tm-utils, tm-lmp](#tm-librarian--python3-tm-librarian--tm-lfs--tm-utils--tm-lmp)
+  * [libpmem, libpmem-dev](#libpmem-libpmem-dev)
+  * [tm-librarian, python3-tm-librarian, tm-lfs, tm-utils, tm-lmp](#tm-librarian-python3-tm-librarian-tm-lfs-tm-utils-tm-lmp)
   * [tm-manifesting](#tm-manifesting)
   * [l4fame-node](#l4fame-node)
   * [l4fame-manager](#l4fame-manager)
   * [tm-hello-world](#tm-hello-world)
   * [tm-libfuse](#tm-libfuse)
-  * [libfam-atomic2, libfam-atomic2-dev, libfam-atomic2-dbg, libfam-atomic2-tests](#libfam-atomic2--libfam-atomic2-dev--libfam-atomic2-dbg--libfam-atomic2-tests)
+  * [libfam-atomic2, libfam-atomic2-dev, libfam-atomic2-dbg, libfam-atomic2-tests](#libfam-atomic2-libfam-atomic2-dev-libfam-atomic2-dbg-libfam-atomic2-tests)
   * [fame](#fame)
-  * [linux-firmware-image-4.8.0-l4fame+, linux-headers-4.8.0-l4fame+, linux-libc-dev, linux-image-4.8.0-l4fame+, linux-image-4.8.0-l4fame+-dbg](#linux-firmware-image-480-l4fame---linux-headers-480-l4fame---linux-libc-dev--linux-image-480-l4fame---linux-image-480-l4fame--dbg)
+  * [linux-firmware-image-4.8.0-l4fame+, linux-headers-4.8.0-l4fame+, linux-libc-dev, linux-image-4.8.0-l4fame+, linux-image-4.8.0-l4fame+-dbg](#linux-firmware-image-480-l4fame-linux-headers-480-l4fame-linux-libc-dev-linux-image-480-l4fame-linux-image-480-l4fame-dbg)
 
 ---
-### nvml, libpmem, libpmem-dev
+### libpmem, libpmem-dev
 **Packages Required for Building** 
 ```
 uuid-dev 
