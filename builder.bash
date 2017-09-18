@@ -84,10 +84,10 @@ git clone https://github.com/FabricAttachedMemory/nvml.git && \
     ( cd nvml && git checkout upstream && fix_nvml_rules && run_update && gbp buildpackage --git-prebuild='mv /tmp/rules debian/rules' ) || \
     ( cd nvml && git checkout upstream && fix_nvml_rules && set -- `git pull` && [ "$1" == "Updating" ] && run_update && gbp buildpackage --git-prebuild='mv /tmp/rules debian/rules' )
 
-# run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
-git clone https://github.com/AustinHunting/tm-librarian.git && \
-    ( cd tm-librarian && run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch ) || \
-    ( cd tm-librarian && set -- `git pull` && [ "$1" == "Updating" ] && run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch )
+# run_update && gbp buildpackage
+git clone -b debian https://github.com/FabricAttachedMemory/tm-librarian.git && \
+    ( cd tm-librarian && run_update && gbp buildpackage ) || \
+    ( cd tm-librarian && set -- `git pull` && [ "$1" == "Updating" ] && run_update && gbp buildpackage )
 
 # run_update && gbp buildpackage && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
 git clone https://github.com/keith-packard/tm-manifesting.git && \
