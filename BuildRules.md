@@ -29,22 +29,26 @@ dch = False
 
 ---
 ### Packages
-  * [libpmem, libpmem-dev](#libpmem-libpmem-dev)
-  * [tm-librarian, python3-tm-librarian, tm-lfs, tm-utils, tm-lmp](#tm-librarian-python3-tm-librarian-tm-lfs-tm-utils-tm-lmp)
+  * [nvml](#nvml)
+  * [tm-librarian](#tm-librarian)
   * [tm-manifesting](#tm-manifesting)
   * [l4fame-node](#l4fame-node)
   * [l4fame-manager](#l4fame-manager)
   * [tm-hello-world](#tm-hello-world)
   * [tm-libfuse](#tm-libfuse)
-  * [libfam-atomic2, libfam-atomic2-dev, libfam-atomic2-dbg, libfam-atomic2-tests](#libfam-atomic2-libfam-atomic2-dev-libfam-atomic2-dbg-libfam-atomic2-tests)
+  * [libfam-atomic](#libfam-atomic)
   * [fame](#fame)
-  * [linux-firmware-image-4.8.0-l4fame+, linux-headers-4.8.0-l4fame+, linux-libc-dev, linux-image-4.8.0-l4fame+, linux-image-4.8.0-l4fame+-dbg](#linux-firmware-image-480-l4fame-linux-headers-480-l4fame-linux-libc-dev-linux-image-480-l4fame-linux-image-480-l4fame-dbg)
+  * [linux-kernel](#linux-kernel)
 
 ---
-### libpmem, libpmem-dev
-**Packages Required for Building** 
+### nvml
+**Packages**
+```shell
+libpmem_[version].deb libpmem-dev_[version].deb
 ```
-uuid-dev 
+**Build Requirements** 
+```shell
+apt-get install uuid-dev 
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/nvml.git).
@@ -90,10 +94,18 @@ gbp buildpackage --git-prebuild='mv /tmp/rules debian/rules'
 ```
 
 ---
-### tm-librarian, python3-tm-librarian, tm-lfs, tm-utils, tm-lmp
-**Packages Required for Building** 
+### tm-librarian
+**Packages**
+```shell
+tm-librarian_[version].deb 
+python3-tm-librarian_[version].deb 
+tm-lfs_[version].deb 
+tm-utils_[version].deb 
+tm-lmp_[version].deb
 ```
-dh-exec
+**Build Requirements** 
+```shell
+apt-get install dh-exec
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/tm-librarian.git).
@@ -105,9 +117,13 @@ gbp buildpackage
 
 ---
 ### tm-manifesting
-**Packages Required for Building** 
+**Packages**
+```shell
+tm-manifesting_[version].deb
 ```
-dh-exec
+**Build Requirements** 
+```shell
+apt-get install dh-exec
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/keith-packard/tm-manifesting.git).
@@ -118,9 +134,13 @@ gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
 
 ---
 ### l4fame-node
-**Packages Required for Building**
+**Packages**
 ```shell
-None
+l4fame-node_[version].deb
+```
+**Build Requirements**
+```shell
+# no package requirements
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/l4fame-node.git).
@@ -131,22 +151,30 @@ gbp buildpackage
 
 ---
 ### l4fame-manager
-**Packages Required for Building**
+**Packages**
 ```shell
-none
+l4fame-manager_[version].deb
+```
+**Build Requirements**
+```shell
+# no package requirements
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/l4fame-manager.git).
 2. Build with 
-```sell
+```shell
 gbp buildpackage
 ```
 
 ---
 ### tm-hello-world
-**Packages Required for Building**
+**Packages**
 ```shell
-none
+tm-hello-world_[version].deb
+```
+**Build Requirements**
+```shell
+# no package requirements
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/tm-hello-world.git).
@@ -158,9 +186,13 @@ gbp buildpackage
 
 ---
 ### tm-libfuse
-**Packages Required for Building**
+**Packages**
 ```shell
-libselinux-dev
+tm-libfuse_[version].deb
+```
+**Build Requirements**
+```shell
+apt-get install libselinux-dev
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/tm-libfuse.git).
@@ -171,10 +203,17 @@ gbp buildpackage
 ```
 
 ---
-### libfam-atomic2, libfam-atomic2-dev, libfam-atomic2-dbg, libfam-atomic2-tests
-**Packages Required for Building**
+### libfam-atomic
+**Packages**
 ```shell
-pkg-config autoconf-archive asciidoc libxml2-utils xsltproc docbook-xsl docbook-xml
+libfam-atomic2_[version].deb 
+libfam-atomic2-dev_[version].deb 
+libfam-atomic2-dbg_[version].deb 
+libfam-atomic2-tests_[version].deb
+```
+**Build Requirements**
+```shell
+apt-get install pkg-config autoconf-archive asciidoc libxml2-utils xsltproc docbook-xsl docbook-xml
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/libfam-atomic.git).
@@ -186,9 +225,13 @@ gbp buildpackage --git-upstream-tree=branch
 
 ---
 ### fame 
-**Packages Required for Building**
+**Packages**
 ```shell
-none
+fame_[version].deb
+```
+**Build Requirements**
+```shell
+# no package requirements
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/Emulation.git).
@@ -199,14 +242,22 @@ gbp buildpackage --git-upstream-branch=master
 ```
 
 ---
-### linux-firmware-image-4.8.0-l4fame+, linux-headers-4.8.0-l4fame+, linux-libc-dev, linux-image-4.8.0-l4fame+, linux-image-4.8.0-l4fame+-dbg
-**Packages Required for Building**
+### linux-kernel 
+**Packages**
 ```shell
-build-essential bc libssl-dev
+linux-firmware-image-4.8.0-l4fame+_[version].deb
+linux-headers-4.8.0-l4fame+_[version].deb 
+linux-libc-dev_[version].deb 
+linux-image-4.8.0-l4fame+_[version].deb 
+linux-image-4.8.0-l4fame+-dbg_[version].deb
+```
+**Build Requirements**
+```shell
+apt-get install build-essential bc libssl-dev
 ```
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/linux-l4fame.git).
-2. Building with
+2. Build with
 ```shell
 make deb-pkg
 ```
