@@ -19,7 +19,7 @@ cleaner = fakeroot debian/rules clean
 ignore-new = True
 
 [buildpackage]
-export-dir = /build/gbp-build-area/
+export-dir = /gbp-build-area/
 
 [git-import-orig]
 dch = False
@@ -82,7 +82,7 @@ mkdir -p /deb;
 mkdir -p /deb/arm64;
 
 mkdir -p /build;
-mkdir -p /build/gbp-build-area;
+mkdir -p /gbp-build-area;
 
 # Check if running in a chroot
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
@@ -147,7 +147,7 @@ git clone https://github.com/FabricAttachedMemory/Emulation.git && \
     ( cd Emulation && set -- `git pull` && [ "$1" == "Updating" ] && run_update && gbp buildpackage --git-upstream-branch=master )
 
 # copy all .debs to external deb folder
-cp /build/gbp-build-area/*.deb /deb;
+cp /gbp-build-area/*.deb /deb;
 
 # Old pathway
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
