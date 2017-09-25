@@ -1,32 +1,14 @@
-#!/bin/bash
-# maintain proxy and cores information in chroot
-# cores
-if [ "$1" ]; then
-    cores="$1"
-fi
-# http_proxy
-if [ "$2" ]; then
-    http_proxy="$2"
-fi
-# https_proxy
-if [ "$3" ]; then
-    https_proxy="$3"
-fi
+#!/usr/bin/env bash
+apt-get update && apt-get upgrade -y;
+apt-get install -y git-buildpackage;                            # Needed for all packages
+apt-get install -y libssl-dev bc pkg-config build-essential;    # Needed for the kernel
 
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
-    # Install updates in docker container
-    apt update && \
-    apt upgrade -y;
-    apt install -y git-buildpackage;
-    apt install -y libssl-dev bc pkg-config build-essential;
-    apt install -y debootstrap qemu qemu-user-static;
+    # Install packages in the docker container
+    apt-get install -y debootstrap qemu qemu-user-static;
 else
-    # Install updates in arm64 chroot
-    apt update && \
-    apt upgrade -y;
-    apt install -y git-buildpackage;
-    apt install -y libssl-dev bc pkg-config build-essential;
-    apt install -y linux-image-arm64;
+    # Install packages in the arm64 chroot
+    apt-get install -y linux-image-arm64;
 fi
 
 # Sets the configuration files for devbuilder and gbp
@@ -99,7 +81,7 @@ fi
 mkdir -p /deb;
 mkdir -p /build;
 
-# check if in a chroot
+# Check if running in a chroot
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     # build chroot if none exists
     ( ls /arm64 ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://httpredir.debian.org/debian;
@@ -110,7 +92,7 @@ if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     mkdir -p /arm64/jessie/build;
     # uncomment mount builder when update checking is fixed
     # mount --bind /build /arm64/jessie/build;
-    # copy builder.bash into the chroot
+    # Copy builder.bash into the chroot
     cp "$0" /arm64/jessie
 fi
 
@@ -171,7 +153,7 @@ git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
     ( cd linux-l4fame && set -- `git pull` && [ "$1" == "Updating" ] && make -j $CORES deb-pkg );
 cp /build/*.deb /deb;
 
-# change into the chroot and run builder.bash
+# Change into the chroot and run builder.bash
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
-    chroot /arm64/jessie "$0 $CORES $http_proxy $https_proxy"
+    chroot /arm64/jessie $0 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
 fi
