@@ -70,13 +70,9 @@ chmod +x /tmp/rules
 # If user sets "-e cores=number_of_cores" use that many cores to compile
 if [ "$cores" ]; then
     CORES=$(( $cores ))
-# Set $CORES to half the cpu cores, capped at 8
+# Set $CORES to half the cpu cores.
 else
-    if [ $(( ( `nproc` + 1 ) / 2 )) -gt "8" ];
-        then CORES=8
-    else
-        CORES=$(( ( `nproc` + 1 ) / 2 ))
-    fi
+    CORES=$(( ( `nproc` + 1 ) / 2 ))
 fi
 
 mkdir -p /deb;
