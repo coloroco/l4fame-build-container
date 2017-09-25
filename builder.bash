@@ -84,7 +84,7 @@ mkdir -p /build;
 # Check if running in a chroot
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     # build chroot if none exists
-    ( ls /arm64 ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://httpredir.debian.org/debian;
+    ( ls /arm64 &>/dev/null ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://httpredir.debian.org/debian;
     # mount /deb and /build so we can get at them from inside the chroot
     mkdir -p /deb/arm64;
     mkdir -p /arm64/jessie/deb;
@@ -154,6 +154,7 @@ git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
 cp /build/*.deb /deb;
 
 # Change into the chroot and run builder.bash
+set -- `basename $0`
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
-    chroot /arm64/jessie $0 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
+    chroot /arm64/jessie "/$1" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
 fi
