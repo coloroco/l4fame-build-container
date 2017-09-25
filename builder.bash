@@ -1,7 +1,17 @@
 #!/bin/bash
-# maintain proxy information in chroot
-export http_proxy=$http_proxy
-export https_proxy=$https_proxy
+# maintain proxy and cores information in chroot
+# cores
+if [ "$1" ]; then
+    cores="$1"
+fi
+# http_proxy
+if [ "$2" ]; then
+    http_proxy="$2"
+fi
+# https_proxy
+if [ "$3" ]; then
+    https_proxy="$3"
+fi
 
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     # Install updates in docker container
@@ -75,7 +85,6 @@ chmod +x /tmp/rules
 }
 
 # If user sets "-e cores=number_of_cores" use that many cores to compile
-cores=$cores
 if [ "$cores" ]; then
     CORES=$(( $cores ))
 # Set $CORES to half the cpu cores, capped at 8
@@ -164,5 +173,5 @@ cp /build/*.deb /deb;
 
 # change into the chroot and run builder.bash
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
-    chroot /arm64/jessie "$0"
+    chroot /arm64/jessie "$0 $CORES $http_proxy $https_proxy"
 fi
