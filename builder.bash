@@ -19,7 +19,7 @@ cleaner = fakeroot debian/rules clean
 ignore-new = True
 
 [buildpackage]
-export-dir = /build-area/
+export-dir = /build/gbp-build-area/
 
 [git-import-orig]
 dch = False
@@ -79,14 +79,16 @@ else
 fi
 
 mkdir -p /deb;
+mkdir -p /deb/arm64;
+
 mkdir -p /build;
+mkdir -p /build/gbp-build-area;
 
 # Check if running in a chroot
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     # build chroot if none exists
     ( ls /arm64 &>/dev/null ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://httpredir.debian.org/debian;
     # mount /deb and /build so we can get at them from inside the chroot
-    mkdir -p /deb/arm64;
     mkdir -p /arm64/jessie/deb;
     mount --bind /deb/arm64 /arm64/jessie/deb;
     mkdir -p /arm64/jessie/build;
@@ -145,7 +147,7 @@ git clone https://github.com/FabricAttachedMemory/Emulation.git && \
     ( cd Emulation && set -- `git pull` && [ "$1" == "Updating" ] && run_update && gbp buildpackage --git-upstream-branch=master )
 
 # copy all .debs to external deb folder
-cp /build-area/*.deb /deb;
+cp /build/gbp-build-area/*.deb /deb;
 
 # Old pathway
 git clone https://github.com/FabricAttachedMemory/linux-l4fame.git && \
