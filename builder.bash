@@ -75,20 +75,17 @@ else
     CORES=$(( ( `nproc` + 1 ) / 2 ))
 fi
 
-mkdir -p /deb;
-mkdir -p /build;
-mkdir -p /gbp-build-area;
-
 # Check if running in a chroot
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     # build chroot if none exists
     ( ls /arm64 &>/dev/null ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://httpredir.debian.org/debian;
     # mount /deb and /build so we can get at them from inside the chroot
+    mkdir -p /deb;
+    mkdir -p /build;
     mkdir -p /deb/arm64;
     mkdir -p /arm64/jessie/deb;
-    mount --bind /deb/arm64 /arm64/jessie/deb;
     mkdir -p /arm64/jessie/build;
-    # uncomment mount builder when update checking is fixed
+    mount --bind /deb/arm64 /arm64/jessie/deb;
     # mount --bind /build /arm64/jessie/build;
     # Copy builder.bash into the chroot
     cp "$0" /arm64/jessie
@@ -103,9 +100,9 @@ git clone https://github.com/FabricAttachedMemory/nvml.git || \
     ( cd nvml && git checkout upstream && fix_nvml_rules && run_update && gbp buildpackage --git-prebuild='mv /tmp/rules debian/rules' );
 
 # clone debian && checkout upstream run_update && gbp buildpackage
-git clone -b debian https://github.com/FabricAttachedMemory/tm-librarian.git || \
-    ( cd tm-librarian && git checkout upstream && set -- `git pull` && [ "$1" == "Updating" ] ) && \
-    ( cd tm-librarian && git checkout upstream && run_update && gbp buildpackage );
+git clone https://github.com/FabricAttachedMemory/tm-librarian.git || \
+    ( cd tm-librarian && set -- `git pull` && [ "$1" == "Updating" ] ) && \
+    ( cd tm-librarian && run_update && gbp buildpackage );
 
 # run_update && gbp buildpackage && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
 git clone https://github.com/keith-packard/tm-manifesting.git || \
@@ -145,12 +142,13 @@ git clone https://github.com/FabricAttachedMemory/Emulation.git || \
 # copy all .debs to external deb folder
 cp /gbp-build-area/*.deb /deb;
 
-# Old pathway
-git clone https://github.com/FabricAttachedMemory/linux-l4fame.git || \
-    ( cd linux-l4fame && set -- `git pull` && [ "$1" == "Updating" ] ) && \
-    ( cd linux-l4fame && make -j $CORES deb-pkg );
-cp /build/*.deb /deb;
-
+# Don't build for arm64, .config file is unset
+if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
+    git clone https://github.com/FabricAttachedMemory/linux-l4fame.git || \
+        ( cd linux-l4fame && set -- `git pull` && [ "$1" == "Updating" ] ) && \
+        ( cd linux-l4fame && make -j $CORES deb-pkg );
+    cp /build/*.deb /deb;
+fi
 
 # Change into the chroot and run builder.bash
 set -- `basename $0`
