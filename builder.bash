@@ -29,9 +29,9 @@ EOF
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     # In docker, mark repositories to be built
     echo "postbuild=touch ../\$(basename \`pwd\`)-update" >> $HOME/.gbp.conf
-else
-    # In chroot, mark built repositories
-    echo "postbuild=rm ../\$(basename \`pwd\`)-update" >> $HOME/.gbp.conf
+# else
+#     # In chroot, mark built repositories
+#     echo "postbuild=rm ../\$(basename \`pwd\`)-update" >> $HOME/.gbp.conf
 fi
 cat <<EOF >> $HOME/.gbp.conf
 [git-import-orig]
