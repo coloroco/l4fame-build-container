@@ -76,8 +76,6 @@ else
 fi
 
 mkdir -p /deb;
-mkdir -p /deb/arm64;
-
 mkdir -p /build;
 mkdir -p /gbp-build-area;
 
@@ -86,6 +84,7 @@ if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     # build chroot if none exists
     ( ls /arm64 &>/dev/null ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://httpredir.debian.org/debian;
     # mount /deb and /build so we can get at them from inside the chroot
+    mkdir -p /deb/arm64;
     mkdir -p /arm64/jessie/deb;
     mount --bind /deb/arm64 /arm64/jessie/deb;
     mkdir -p /arm64/jessie/build;
