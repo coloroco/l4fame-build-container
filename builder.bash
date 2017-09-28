@@ -6,9 +6,9 @@ apt-get install -y libssl-dev bc pkg-config build-essential;    # Needed for the
 if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
     # Only needed in the docker container
     apt-get install -y debootstrap qemu qemu-user-static;
-# else
-#     # Only needed in the arm64 chroot
-#     apt-get install -y linux-image-arm64;
+else
+    # Only needed in the arm64 chroot
+    apt-get install -y linux-image-arm64;
 fi
 
 
@@ -101,14 +101,14 @@ get_update_path () {
             cd $path;
             set -- `git pull`;
             if [ "$1" != "Updating" ]; then
-                path="";
+                path="./";
             fi
         fi
     else
         # Check if docker marked the repository as needing a rebuild
         ls $path"-update" &>/dev/null;
         if [ "$?" != "0" ]; then
-            path="";
+            path="./";
         fi
     fi
 }
