@@ -47,8 +47,8 @@ EOF
 
 # Check for prerequisite build packages, and install them
 run_update () {
-    ( git checkout upstream );
-    ( git checkout debian );
+    ( git checkout upstream 2>/dev/null );
+    ( git checkout debian 2>/dev/null );
     ( ls debian &>/dev/null ) && \
     ( ( dpkg-checkbuilddeps &>/dev/null ) || \
     ( echo "y" | mk-build-deps -i -r ) )
