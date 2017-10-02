@@ -3,7 +3,7 @@ apt-get update && apt-get upgrade -y;
 apt-get install -y git-buildpackage;                            # Needed for all packages
 apt-get install -y libssl-dev bc pkg-config build-essential;    # Needed for the kernel
 # Check if we're running in docker or a chroot
-if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
+if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Only needed in the docker container
     apt-get install -y debootstrap qemu qemu-user-static;
 else
@@ -26,7 +26,7 @@ export-dir = /gbp-build-area/
 EOF
 # Insert a postbuild command into the middle of the gbp configuration file
 # This indicates to the arm64 chroot which repositories need to be built
-if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
+if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # In docker, mark repositories to be built
     echo "postbuild=touch ../\$(basename \`pwd\`)-update" >> $HOME/.gbp.conf
 else
@@ -91,7 +91,7 @@ get_update_path () {
     # Get a path from the git URL
     path="/build/"`echo "$1" | cut -d '/' -f 5 | cut -d '.' -f 1`;
     # Check if we're running in docker or a chroot
-    if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
+    if [[ $(ls /proc | wc -l) -gt 0 ]]; then
         # Check if the repository needs to be cloned, then clone
         ls $path &>/dev/null;
         if [ "$?" != "0" ]; then
@@ -123,7 +123,7 @@ else
 fi
 
 # Check if we're running in docker or a chroot
-if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
+if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Build an arm64 chroot if none exists
     ( ls /arm64 &>/dev/null ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://httpredir.debian.org/debian;
     # Make the directories that gbp will download repositories to and build in
@@ -177,7 +177,7 @@ cp /gbp-build-area/*.deb /deb;
 
 
 # Don't build the kernel for arm64, .config file is unset, never completes
-if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
+if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
     ( cd $path && make -j $CORES deb-pkg );
     cp /build/*.deb /deb;
@@ -186,6 +186,6 @@ fi
 
 # Change into the chroot and run this script
 set -- `basename $0`
-if [ $(ls -di / | cut -d ' ' -f 1) == "2" ]; then
+if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     chroot /arm64/jessie "/$1" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
 fi
