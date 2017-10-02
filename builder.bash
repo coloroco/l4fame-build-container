@@ -125,7 +125,7 @@ fi
 # Check if we're running in docker or a chroot
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Build an arm64 chroot if none exists
-    ( ls /arm64 &>/dev/null ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://httpredir.debian.org/debian;
+    ( ls /arm64 &>/dev/null ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://deb.debian.org/debian/;
     # Make the directories that gbp will download repositories to and build in
     mkdir -p /deb;
     mkdir -p /build;
