@@ -176,12 +176,14 @@ get_update_path https://github.com/FabricAttachedMemory/Emulation.git;
 cp /gbp-build-area/*.deb /deb;
 
 
-# Don't build the kernel for arm64, .config file is unset, never completes
+# Build with config.l4fame in docker and defconfig in chroot
+get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
-    ( cd $path && make -j $CORES deb-pkg );
-    cp /build/*.deb /deb;
+    ( cd $path && cp config.l4fame .config && make -j $CORES deb-pkg );
+else
+    ( cd $path && make -j $CORES defconfig deb-pkg );
 fi
+cp /build/*.deb /deb;
 
 
 # Change into the chroot and run this script
