@@ -181,7 +181,7 @@ get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     ( cd $path && cp config.l4fame .config && make -j $CORES deb-pkg );
 else
-    ( cd $path && make -j $CORES defconfig deb-pkg );
+    ( cd $path && make -j $CORES defconfig && make -j $CORES deb-pkg );
 fi
 cp /build/*.deb /deb;
 
