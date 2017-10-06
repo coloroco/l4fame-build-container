@@ -180,10 +180,10 @@ cp /gbp-build-area/*.deb /deb;
 get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     ( cd $path && cp config.l4fame .config && make -j $CORES deb-pkg );
-    cp /build/*amd64.deb /deb;
+    mv /build/*amd64.deb /deb;
 else
     ( cd $path && make defconfig && make -j $CORES deb-pkg );
-    cp /build/*arm64.deb /deb;
+    mv /build/*arm64.deb /deb;
 fi
 
 
