@@ -40,7 +40,7 @@ EOF
 
 # devbuilder configuration file
 cat <<EOF > $HOME/.devscripts
-DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc -i -b -j$CORES"
+DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc -b -j$CORES"
 EOF
 }
 
