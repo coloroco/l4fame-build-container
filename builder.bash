@@ -113,6 +113,12 @@ get_update_path () {
     fi
 }
 
+# Fix dirty kernel messages
+clean_kernel () {
+    git add . ;
+    git commit -a -s -m "removing dirty messages" ;
+}
+
 
 # If user sets "-e cores=number_of_cores" use that many cores when compiling
 if [ "$cores" ]; then
@@ -179,11 +185,11 @@ cp /gbp-build-area/*.deb /deb;
 # Build with config.l4fame in docker and defconfig in chroot
 get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    ( cd $path && cp config.l4fame .config && make -j$CORES deb-pkg &&\
+    ( cd $path && cp config.l4fame .config && clean_kernel && make -j$CORES deb-pkg &&\
             touch ../$(basename `pwd`)-update );
     mv /build/*amd64.deb /deb;
 else
-    ( cd $path && make defconfig && make -j$CORES deb-pkg &&\
+    ( cd $path && make defconfig && clean_kernel && make -j$CORES deb-pkg &&\
             rm ../$(basename `pwd`)-update );
     mv /build/*arm64.deb /deb;
 fi
