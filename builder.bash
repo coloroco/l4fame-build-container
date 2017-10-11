@@ -40,7 +40,7 @@ EOF
 
 # devbuilder configuration file
 cat <<EOF > $HOME/.devscripts
-DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc -b -j$CORES"
+DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc -b -i -j$CORES"
 EOF
 }
 
@@ -94,6 +94,7 @@ get_update_path () {
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
         # Check if the repository needs to be cloned, then clone
         ls $path &>/dev/null;
+        echo "$?";
         if [ "$?" != "0" ]; then
             git clone "$1";
         else
