@@ -179,10 +179,12 @@ cp /gbp-build-area/*.deb /deb;
 # Build with config.l4fame in docker and defconfig in chroot
 get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    ( cd $path && cp config.l4fame .config && make -j$CORES deb-pkg );
+    ( cd $path && cp config.l4fame .config && make -j$CORES deb-pkg &&\
+            touch ../$(basename `pwd`)-update );
     mv /build/*amd64.deb /deb;
 else
-    ( cd $path && make defconfig && make -j$CORES deb-pkg );
+    ( cd $path && make defconfig && make -j$CORES deb-pkg &&\
+            rm ../$(basename `pwd`)-update );
     mv /build/*arm64.deb /deb;
 fi
 
