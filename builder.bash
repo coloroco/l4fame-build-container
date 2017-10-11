@@ -49,7 +49,7 @@ EOF
 run_update () {
     ( git checkout upstream 2>/dev/null );
     ( git checkout debian 2>/dev/null );
-    ( ls debian &>/dev/null ) && \
+    ( test -d "debian" ) && \
     ( ( dpkg-checkbuilddeps &>/dev/null ) || \
     ( echo "y" | mk-build-deps -i -r ) )
 }
@@ -93,9 +93,7 @@ get_update_path () {
     # Check if we're running in docker or a chroot
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
         # Check if the repository needs to be cloned, then clone
-        ls $path &>/dev/null;
-        echo "$?";
-        if [ "$?" != "0" ]; then
+        if [ ! -d "$path"  ]; then
             git clone "$1";
         else
             # Check if there is an update, then update
@@ -107,8 +105,7 @@ get_update_path () {
         fi
     else
         # Check if docker marked the repository as needing a rebuild
-        ls $path"-update" &>/dev/null;
-        if [ "$?" != "0" ]; then
+        if [ ! test -f $path"-update" ]; then
             path="./";
         fi
     fi
@@ -132,7 +129,7 @@ fi
 # Check if we're running in docker or a chroot
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Build an arm64 chroot if none exists
-    ( ls /arm64 &>/dev/null ) || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://deb.debian.org/debian/;
+    test -d "arm64" || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://deb.debian.org/debian/;
     # Make the directories that gbp will download repositories to and build in
     mkdir -p /deb;
     mkdir -p /build;
