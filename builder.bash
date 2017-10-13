@@ -97,8 +97,7 @@ get_update_path () {
             git clone "$1";
         else
             # Check if there is an update, then update
-            cd $path;
-            set -- `git pull`;
+            ( cd $path && set -- `git pull` );
             if [ "$1" != "Updating" ]; then
                 path="./";
             fi
