@@ -68,7 +68,7 @@ override_dh_auto_install:
 override_dh_install:
 \tmkdir -p debian/tmp/usr/share/nvml/
 \tcp utils/nvml.magic debian/tmp/usr/share/nvml/
-\tmv debian/tmp/usr/lib64 debian/tmp/usr/lib
+\tmv -f debian/tmp/usr/lib64 debian/tmp/usr/lib
 \tdh_install
 
 override_dh_auto_test:
@@ -151,7 +151,7 @@ set_config_files;
 
 fix_nvml_rules;
 get_update_path https://github.com/FabricAttachedMemory/nvml.git;
-( cd $path && run_update && gbp buildpackage --git-prebuild='mv /tmp/rules debian/rules' );
+( cd $path && run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' );
 
 get_update_path https://github.com/FabricAttachedMemory/tm-librarian.git;
 ( cd $path && run_update && gbp buildpackage );
@@ -186,11 +186,11 @@ get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     ( cd $path && cp config.l4fame .config && clean_kernel && make -j$CORES deb-pkg && \
             touch ../$(basename `pwd`)-update );
-    mv /build/*amd64.deb /gbp-build-area;
+    mv -f /build/*amd64.deb /gbp-build-area;
 else
     ( cd $path && make defconfig && clean_kernel && make -j$CORES deb-pkg && \
             rm ../$(basename `pwd`)-update );
-    mv /build/*arm64.deb /gbp-build-area;
+    mv -f /build/*arm64.deb /gbp-build-area;
 fi
 cp /gbp-build-area/*.deb /deb;
 
