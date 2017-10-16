@@ -69,7 +69,7 @@ override_dh_auto_install:
 override_dh_install:
 \tmkdir -p debian/tmp/usr/share/nvml/
 \tcp utils/nvml.magic debian/tmp/usr/share/nvml/
-\t[ -d "debian/tmp/usr/lib64" ] && mv -f debian/tmp/usr/lib64 debian/tmp/usr/lib
+\t-mv -f debian/tmp/usr/lib64 debian/tmp/usr/lib
 \tdh_install
 
 override_dh_auto_test:
