@@ -47,11 +47,12 @@ EOF
 
 # Check for prerequisite build packages, and install them
 run_update () {
-    ( git checkout upstream 2>/dev/null );
-    ( git checkout debian 2>/dev/null );
-    ( test -d "debian" ) && \
-    ( ( dpkg-checkbuilddeps &>/dev/null ) || \
-    ( echo "y" | mk-build-deps -i -r ) )
+    git checkout upstream 2>/dev/null;
+    git checkout debian 2>/dev/null;
+    if [ -d "debian" ]; then
+        ( dpkg-checkbuilddeps &>/dev/null ) || \
+        ( echo "y" | mk-build-deps -i -r )
+    fi
 }
 
 
@@ -89,23 +90,27 @@ chmod +x /tmp/rules
 # get_update_path https://github.com/FabricAttachedMemory/l4fame-build-container.git
 get_update_path () {
     # Get a path from the git URL
-    path="/build/"`echo "$1" | cut -d '/' -f 5 | cut -d '.' -f 1`;
+    path=`pwd`"/"`echo "$1" | cut -d '/' -f 5 | cut -d '.' -f 1`;
+    # Until proven otherwise, assume we have to build
+    BUILD=true;
     # Check if we're running in docker or a chroot
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
         # Check if the repository needs to be cloned, then clone
         if [ ! -d "$path"  ]; then
             git clone "$1";
         else
-            # Check if there is an update, then update
+            # Check if the repository needs to be updated, then update
             ( cd $path && set -- `git pull` );
             if [ "$1" != "Updating" ]; then
-                path="./";
+                # No update, don't build
+                BUILD=false;
             fi
         fi
     else
         # Check if docker marked the repository as needing a rebuild
-        if [ ! test -f $path"-update" ]; then
-            path="./";
+        if [ ! -f $(basename $path"-update") ]; then
+            # No update, don't build
+            BUILD=false;
         fi
     fi
 }
@@ -120,7 +125,7 @@ set_kernel_config () {
         yes '' | make oldconfig;
     fi
     git add . ;
-    git commit -a -s -m "removing dirty messages" ;
+    git commit -a -s -m "Removing -dirty";
 }
 
 
@@ -135,18 +140,18 @@ fi
 # Check if we're running in docker or a chroot
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Build an arm64 chroot if none exists
-    test -d "arm64" || qemu-debootstrap --arch=arm64 unstable /arm64/jessie http://deb.debian.org/debian/;
+    test -d "/arm64" || qemu-debootstrap --arch=arm64 stretch /arm64/stretch http://deb.debian.org/debian/;
     # Make the directories that gbp will download repositories to and build in
     mkdir -p /deb;
     mkdir -p /build;
     mkdir -p /deb/arm64;
-    mkdir -p /arm64/jessie/deb;
-    mkdir -p /arm64/jessie/build;
+    mkdir -p /arm64/stretch/deb;
+    mkdir -p /arm64/stretch/build;
     # Mount /deb and /build so we can get at them from inside the chroot
-    mount --bind /deb/arm64 /arm64/jessie/deb;
-    mount --bind /build /arm64/jessie/build;
+    mount --bind /deb/arm64 /arm64/stretch/deb;
+    mount --bind /build /arm64/stretch/build;
     # Copy this script into the chroot
-    cp "$0" /arm64/jessie
+    cp "$0" /arm64/stretch
 fi
 
 # Change into build directory and set the configuration files
@@ -156,31 +161,31 @@ set_config_files;
 
 fix_nvml_rules;
 get_update_path https://github.com/FabricAttachedMemory/nvml.git;
-( cd $path && run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' );
 
 get_update_path https://github.com/FabricAttachedMemory/tm-librarian.git;
-( cd $path && run_update && gbp buildpackage );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
 
 get_update_path https://github.com/keith-packard/tm-manifesting.git;
-( cd $path && run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch );
 
 get_update_path https://github.com/FabricAttachedMemory/l4fame-node.git;
-( cd $path && run_update && gbp buildpackage );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
 
 get_update_path https://github.com/FabricAttachedMemory/l4fame-manager.git;
-( cd $path && run_update && gbp buildpackage );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
 
 get_update_path https://github.com/FabricAttachedMemory/tm-hello-world.git;
-( cd $path && run_update && gbp buildpackage );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
 
 get_update_path https://github.com/FabricAttachedMemory/tm-libfuse.git;
-( cd $path && run_update && gbp buildpackage );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
 
 get_update_path https://github.com/FabricAttachedMemory/libfam-atomic.git;
-( cd $path && run_update && gbp buildpackage --git-upstream-tree=branch );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-tree=branch );
 
 get_update_path https://github.com/FabricAttachedMemory/Emulation.git;
-( cd $path && run_update && gbp buildpackage --git-upstream-branch=master );
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master );
 
 # Copy all the built .deb's to the external deb folder
 cp /gbp-build-area/*.deb /deb;
@@ -188,19 +193,20 @@ cp /gbp-build-area/*.deb /deb;
 
 # Build with config.l4fame in docker and oldconfig in chroot
 get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
-if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    ( cd $path && set_kernel_config && make -j$CORES deb-pkg && \
-        touch ../$(basename `pwd`)-update );
-    mv -f /build/*amd64.deb /gbp-build-area;
-else
-    ( cd $path && set_kernel_config && make -j$CORES deb-pkg && \
-        rm ../$(basename `pwd`)-update );
-    mv -f /build/*arm64.deb /gbp-build-area;
+if $BUILD; then
+    cd $path && set_kernel_config && make -j$CORES deb-pkg && \
+    if [[ $(ls /proc | wc -l) -gt 0 ]]; then
+        touch ../$(basename `pwd`)-update;
+        mv -f /build/*amd64.deb /gbp-build-area;
+    else
+        rm ../$(basename `pwd`)-update;
+        mv -f /build/*arm64.deb /gbp-build-area;
+    fi
+    cp /gbp-build-area/*.deb /deb;
 fi
-cp /gbp-build-area/*.deb /deb;
 
 # Change into the chroot and run this script
 set -- `basename $0`
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    chroot /arm64/jessie "/$1" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
+    chroot /arm64/stretch "/$1" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
 fi
