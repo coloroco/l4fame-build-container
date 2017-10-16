@@ -112,7 +112,7 @@ get_update_path () {
 
 # Fix dirty kernel messages
 clean_kernel () {
-    git config --global user.email "l4fame-build-container@hpe.com";
+    git config --global user.email "example@example.com";
     git config --global user.name "l4fame-build-container";
     git add . ;
     git commit -a -s -m "removing dirty messages" ;
