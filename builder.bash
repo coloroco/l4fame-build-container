@@ -111,9 +111,14 @@ get_update_path () {
 }
 
 # Fix dirty kernel messages
-clean_kernel () {
+set_kernel_config () {
     git config --global user.email "example@example.com";
     git config --global user.name "l4fame-build-container";
+    if [[ $(ls /proc | wc -l) -gt 0 ]]; then
+        cp config.l4fame .config;
+    else
+        yes '' | make oldconfig;
+    fi
     git add . ;
     git commit -a -s -m "removing dirty messages" ;
 }
@@ -181,15 +186,15 @@ get_update_path https://github.com/FabricAttachedMemory/Emulation.git;
 cp /gbp-build-area/*.deb /deb;
 
 
-# Build with config.l4fame in docker and defconfig in chroot
+# Build with config.l4fame in docker and oldconfig in chroot
 get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    ( cd $path && cp config.l4fame .config && clean_kernel && make -j$CORES deb-pkg && \
-            touch ../$(basename `pwd`)-update );
+    ( cd $path && set_kernel_config && make -j$CORES deb-pkg && \
+        touch ../$(basename `pwd`)-update );
     mv -f /build/*amd64.deb /gbp-build-area;
 else
-    ( cd $path && make defconfig && clean_kernel && make -j$CORES deb-pkg && \
-            rm ../$(basename `pwd`)-update );
+    ( cd $path && set_kernel_config && make -j$CORES deb-pkg && \
+        rm ../$(basename `pwd`)-update );
     mv -f /build/*arm64.deb /gbp-build-area;
 fi
 cp /gbp-build-area/*.deb /deb;
