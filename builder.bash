@@ -194,14 +194,14 @@ cp /gbp-build-area/*.deb /deb;
 # Build with config.l4fame in docker and oldconfig in chroot
 get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if $BUILD; then
-    cd $path && set_kernel_config && make -j$CORES deb-pkg && \
+    ( cd $path && set_kernel_config && make -j$CORES deb-pkg && \
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
         touch ../$(basename `pwd`)-update;
         mv -f /build/*amd64.deb /gbp-build-area;
     else
         rm ../$(basename `pwd`)-update;
         mv -f /build/*arm64.deb /gbp-build-area;
-    fi
+    fi );
     cp /gbp-build-area/*.deb /deb;
 fi
 
