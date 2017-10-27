@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 apt-get update && apt-get upgrade -y;
-apt-get install -y git-buildpackage;                            # Needed for all packages
-apt-get install -y libssl-dev bc pkg-config build-essential;    # Needed for the kernel
+apt-get install -y git-buildpackage;
+apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential;
 # Check if we're running in docker or a chroot
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Only needed in the docker container
@@ -28,10 +28,10 @@ EOF
 # This indicates to the arm64 chroot which repositories need to be built
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # In docker, mark repositories to be built
-    echo "postbuild=touch ../\$(basename \`pwd\`)-update" >> $HOME/.gbp.conf
+    echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
 else
     # In chroot, mark built repositories
-    echo "postbuild=rm ../\$(basename \`pwd\`)-update" >> $HOME/.gbp.conf
+    echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
 fi
 cat <<EOF >> $HOME/.gbp.conf
 [git-import-orig]
@@ -90,32 +90,35 @@ chmod +x /tmp/rules
 # get_update_path https://github.com/FabricAttachedMemory/l4fame-build-container.git
 get_update_path () {
     # Get a path from the git URL
-    path=`pwd`"/"`echo "$1" | cut -d '/' -f 5 | cut -d '.' -f 1`;
+    path=$(pwd)"/"$(echo "$1" | cut -d '/' -f 5 | cut -d '.' -f 1);
     # Until proven otherwise, assume we have to build
-    BUILD=true;
+    BUILD=false;
     # Check if we're running in docker or a chroot
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
         # Check if the repository needs to be cloned, then clone
         if [ ! -d "$path"  ]; then
             git clone "$1";
+            BUILD=true;
         else
-            # Check if the repository needs to be updated, then update
-            ( cd $path && set -- `git pull` );
-            if [ "$1" != "Updating" ]; then
-                # No update, don't build
-                BUILD=false;
-            fi
+            # Check if any branch in the repository needs to be updated, then update
+            for branch in $(cd $path && git branch -r | cut -d'/' -f2 | cut -d '-' -f1); do
+                git checkout $branch &>/dev/null;
+                ANS=$(cd $path && git pull);
+                if [[ "$ANS" =~ "Updating" ]]; then
+                    BUILD=true;
+                fi
+            done
         fi
     else
         # Check if docker marked the repository as needing a rebuild
-        if [ ! -f $(basename $path"-update") ]; then
-            # No update, don't build
-            BUILD=false;
+        if [ -f $(basename $path"-update") ]; then
+            # Update found, build package
+            BUILD=true;
         fi
     fi
 }
 
-# Fix dirty kernel messages
+# Set .config file for amd64 and arm64, then remove the dirty kernel build messages
 set_kernel_config () {
     git config --global user.email "example@example.com";
     git config --global user.name "l4fame-build-container";
@@ -134,7 +137,7 @@ if [ "$cores" ]; then
     CORES=$(( $cores ))
 # Otherwise set $CORES to half the cpu cores.
 else
-    CORES=$(( ( `nproc` + 1 ) / 2 ))
+    CORES=$((( $(nproc) + 1) / 2))
 fi
 
 # Check if we're running in docker or a chroot
@@ -196,17 +199,17 @@ get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
 if $BUILD; then
     ( cd $path && set_kernel_config; make -j$CORES deb-pkg && \
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-        touch ../$(basename `pwd`)-update;
+        touch ../$(basename $(pwd))-update;
         mv -f /build/*amd64.deb /gbp-build-area;
     else
-        rm ../$(basename `pwd`)-update;
+        rm ../$(basename $(pwd))-update;
         mv -f /build/*arm64.deb /gbp-build-area;
     fi );
     cp /gbp-build-area/*.deb /deb;
 fi
 
 # Change into the chroot and run this script
-set -- `basename $0`
+set -- $(basename $0)
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     chroot /arm64/stretch "/$1" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
 fi
