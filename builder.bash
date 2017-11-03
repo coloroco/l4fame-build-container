@@ -200,16 +200,14 @@ if $BUILD; then
     ( cd $path && set_kernel_config; make -j$CORES deb-pkg && \
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
         touch ../$(basename $(pwd))-update;
-        mv -f /build/*amd64.deb /gbp-build-area;
     else
         rm ../$(basename $(pwd))-update;
-        mv -f /build/*arm64.deb /gbp-build-area;
     fi );
+    mv -f /build/linux*.* /gbp-build-area;
     cp /gbp-build-area/*.deb /deb;
 fi
 
 # Change into the chroot and run this script
-set -- $(basename $0);
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    chroot /arm64/stretch "/$1" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
+    chroot /arm64/stretch "/$(basename $0)" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
 fi
