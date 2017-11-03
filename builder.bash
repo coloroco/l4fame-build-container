@@ -28,10 +28,10 @@ EOF
 # This indicates to the arm64 chroot which repositories need to be built
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # In docker, mark repositories to be built
-    echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
+    echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf;
 else
     # In chroot, mark built repositories
-    echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
+    echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf;
 fi
 cat <<EOF >> $HOME/.gbp.conf
 [git-import-orig]
@@ -51,7 +51,7 @@ run_update () {
     git checkout debian 2>/dev/null;
     if [ -d "debian" ]; then
         ( dpkg-checkbuilddeps &>/dev/null ) || \
-        ( echo "y" | mk-build-deps -i -r )
+        ( echo "y" | mk-build-deps -i -r );
     fi
 }
 
@@ -80,8 +80,8 @@ override_dh_clean:
 \tfind src/ -name 'config.log' -delete
 \tdh_clean
 EOF
-echo -e "$rule" > /tmp/rules
-chmod +x /tmp/rules
+echo -e "$rule" > /tmp/rules;
+chmod +x /tmp/rules;
 }
 
 
@@ -154,7 +154,7 @@ if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     mount --bind /deb/arm64 /arm64/stretch/deb;
     mount --bind /build /arm64/stretch/build;
     # Copy this script into the chroot
-    cp "$0" /arm64/stretch
+    cp "$0" /arm64/stretch;
 fi
 
 # Change into build directory and set the configuration files
@@ -169,7 +169,7 @@ get_update_path https://github.com/FabricAttachedMemory/nvml.git;
 get_update_path https://github.com/FabricAttachedMemory/tm-librarian.git;
 ( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
 
-get_update_path https://github.com/keith-packard/tm-manifesting.git;
+get_update_path https://github.com/FabricAttachedMemory/tm-manifesting.git;
 ( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch );
 
 get_update_path https://github.com/FabricAttachedMemory/l4fame-node.git;
@@ -209,7 +209,7 @@ if $BUILD; then
 fi
 
 # Change into the chroot and run this script
-set -- $(basename $0)
+set -- $(basename $0);
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     chroot /arm64/stretch "/$1" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
 fi
