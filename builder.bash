@@ -12,8 +12,8 @@ else
 fi
 
 
-# Sets the configuration files for devbuilder and gbp
-set_config_files () {
+# Sets the configuration file for gbp
+set_gbp_config () {
 # gbp configuration file
 cat <<EOF > $HOME/.gbp.conf
 [DEFAULT]
@@ -37,11 +37,22 @@ cat <<EOF >> $HOME/.gbp.conf
 [git-import-orig]
 dch = False
 EOF
+}
 
-# devbuilder configuration file
-cat <<EOF > $HOME/.devscripts
-DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc -b -i -j$CORES"
-EOF
+
+# Sets the configuration file for debuild
+# Checks for a signing key to build packages with
+set_debuild_config () {
+    # Check for signing key
+    if [ -f "/keyfile.key" ]; then
+        # Remove old keys, import keyfile.key, get the key uid
+        rm -r $HOME/.gnupg;
+        gpg --import /keyfile.key;
+        GPGID=$(gpg -K | grep uid | cut -d] -f2);
+        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -b -i -j$CORES\"" > $HOME/.devscripts;
+    else
+        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -b -i -j$CORES\"" > $HOME/.devscripts;
+    fi
 }
 
 
@@ -153,13 +164,16 @@ if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Mount /deb and /build so we can get at them from inside the chroot
     mount --bind /deb/arm64 /arm64/stretch/deb;
     mount --bind /build /arm64/stretch/build;
+    # Copy signing key into the chroot if available
+    [ -f "/keyfile.key" ] && cp /keyfile.key /arm64/stretch/keyfile.key;
     # Copy this script into the chroot
     cp "$0" /arm64/stretch;
 fi
 
 # Change into build directory and set the configuration files
 cd /build;
-set_config_files;
+set_gbp_config;
+set_debuild_config;
 
 
 fix_nvml_rules;
@@ -192,6 +206,7 @@ get_update_path https://github.com/FabricAttachedMemory/Emulation.git;
 
 # Copy all the built .deb's to the external deb folder
 cp /gbp-build-area/*.deb /deb;
+cp /gbp-build-area/*.changes /deb;
 
 
 # Build with config.l4fame in docker and oldconfig in chroot
@@ -204,7 +219,10 @@ if $BUILD; then
         rm ../$(basename $(pwd))-update;
     fi );
     mv -f /build/linux*.* /gbp-build-area;
+    # Sign the linux*.changes file if applicable
+    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" /gbp-build-area/linux*.changes );
     cp /gbp-build-area/*.deb /deb;
+    cp /gbp-build-area/*.changes /deb;
 fi
 
 # Change into the chroot and run this script
