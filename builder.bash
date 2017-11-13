@@ -57,12 +57,24 @@ set_debuild_config () {
 
 
 # Check for prerequisite build packages, and install them
+# If there is a branch named "debian", we use that for installing prerequisites
+# Else, use the first branch that contains a folder labeled debian
 run_update () {
-    git checkout upstream 2>/dev/null;
-    git checkout debian 2>/dev/null;
-    if [ -d "debian" ]; then
-        ( dpkg-checkbuilddeps &>/dev/null ) || \
-        ( echo "y" | mk-build-deps -i -r );
+    if [[ "$(git branch -r | grep -v HEAD | cut -d'/' -f2)" =~ "debian" ]]; then
+        git checkout debian -- &>/dev/null;
+        if [ -d "debian" ]; then
+            ( dpkg-checkbuilddeps &>/dev/null ) || \
+            ( echo "y" | mk-build-deps -i -r );
+        fi
+    else
+        for branch in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
+            git checkout $branch -- &>/dev/null;
+            if [ -d "debian" ]; then
+                ( dpkg-checkbuilddeps &>/dev/null ) || \
+                ( echo "y" | mk-build-deps -i -r );
+                break;
+            fi
+        done
     fi
 }
 
@@ -112,8 +124,8 @@ get_update_path () {
             BUILD=true;
         else
             # Check if any branch in the repository needs to be updated, then update
-            for branch in $(cd $path && git branch -r | cut -d'/' -f2 | cut -d '-' -f1); do
-                (cd $path && git checkout $branch &>/dev/null);
+            for branch in $(cd $path && git branch -r | grep -v HEAD | cut -d'/' -f2); do
+                (cd $path && git checkout $branch -- &>/dev/null);
                 ANS=$(cd $path && git pull);
                 if [[ "$ANS" =~ "Updating" ]]; then
                     BUILD=true;
