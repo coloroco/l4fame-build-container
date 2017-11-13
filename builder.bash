@@ -41,7 +41,7 @@ EOF
 
 
 # Sets the configuration file for debuild
-# Checks for a signing key to build packages with
+# Also checks for a signing key to build packages with
 set_debuild_config () {
     # Check for signing key
     if [ -f "/keyfile.key" ]; then
@@ -113,7 +113,7 @@ get_update_path () {
         else
             # Check if any branch in the repository needs to be updated, then update
             for branch in $(cd $path && git branch -r | cut -d'/' -f2 | cut -d '-' -f1); do
-                git checkout $branch &>/dev/null;
+                (cd $path && git checkout $branch &>/dev/null);
                 ANS=$(cd $path && git pull);
                 if [[ "$ANS" =~ "Updating" ]]; then
                     BUILD=true;
