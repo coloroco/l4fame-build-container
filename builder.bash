@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-apt-get update && apt-get upgrade -y;
-apt-get install -y git-buildpackage;
-apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential;
+apt-get update && apt-get upgrade -y
+apt-get install -y git-buildpackage
+apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 # Check if we're running in docker or a chroot
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Only needed in the docker container
-    apt-get install -y debootstrap qemu qemu-user-static;
+    apt-get install -y debootstrap qemu qemu-user-static
 else
     # Only needed in the arm64 chroot
-    apt-get install -y linux-image-arm64;
+    apt-get install -y linux-image-arm64
 fi
 
 
@@ -28,10 +28,10 @@ EOF
 # This indicates to the arm64 chroot which repositories need to be built
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # In docker, mark repositories to be built
-    echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf;
+    echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
 else
     # In chroot, mark built repositories
-    echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf;
+    echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
 fi
 cat <<EOF >> $HOME/.gbp.conf
 [git-import-orig]
@@ -46,12 +46,12 @@ set_debuild_config () {
     # Check for signing key
     if [ -f "/keyfile.key" ]; then
         # Remove old keys, import keyfile.key, get the key uid
-        rm -r $HOME/.gnupg;
-        gpg --import /keyfile.key;
-        GPGID=$(gpg -K | grep uid | cut -d] -f2);
-        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -b -i -j$CORES\"" > $HOME/.devscripts;
+        rm -r $HOME/.gnupg
+        gpg --import /keyfile.key
+        GPGID=$(gpg -K | grep uid | cut -d] -f2)
+        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -b -i -j$CORES\"" > $HOME/.devscripts
     else
-        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -b -i -j$CORES\"" > $HOME/.devscripts;
+        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -b -i -j$CORES\"" > $HOME/.devscripts
     fi
 }
 
@@ -61,18 +61,18 @@ set_debuild_config () {
 # Else, use the first branch that contains a folder labeled debian
 run_update () {
     if [[ "$(git branch -r | grep -v HEAD | cut -d'/' -f2)" =~ "debian" ]]; then
-        git checkout debian -- &>/dev/null;
+        git checkout debian -- &>/dev/null
         if [ -d "debian" ]; then
             ( dpkg-checkbuilddeps &>/dev/null ) || \
-            ( echo "y" | mk-build-deps -i -r );
+            ( echo "y" | mk-build-deps -i -r )
         fi
     else
         for branch in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
-            git checkout $branch -- &>/dev/null;
+            git checkout $branch -- &>/dev/null
             if [ -d "debian" ]; then
                 ( dpkg-checkbuilddeps &>/dev/null ) || \
-                ( echo "y" | mk-build-deps -i -r );
-                break;
+                ( echo "y" | mk-build-deps -i -r )
+                break
             fi
         done
     fi
@@ -103,8 +103,8 @@ override_dh_clean:
 \tfind src/ -name 'config.log' -delete
 \tdh_clean
 EOF
-echo -e "$rule" > /tmp/rules;
-chmod +x /tmp/rules;
+echo -e "$rule" > /tmp/rules
+chmod +x /tmp/rules
 }
 
 
@@ -113,22 +113,22 @@ chmod +x /tmp/rules;
 # get_update_path https://github.com/FabricAttachedMemory/l4fame-build-container.git
 get_update_path () {
     # Get a path from the git URL
-    path=$(pwd)"/"$(echo "$1" | cut -d '/' -f 5 | cut -d '.' -f 1);
+    path=$(pwd)"/"$(echo "$1" | cut -d '/' -f 5 | cut -d '.' -f 1)
     # Until proven otherwise, assume we have to build
-    BUILD=false;
+    BUILD=false
     # Check if we're running in docker or a chroot
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
         # Check if the repository needs to be cloned, then clone
         if [ ! -d "$path"  ]; then
-            git clone "$1";
-            BUILD=true;
+            git clone "$1"
+            BUILD=true
         else
             # Check if any branch in the repository needs to be updated, then update
             for branch in $(cd $path && git branch -r | grep -v HEAD | cut -d'/' -f2); do
-                (cd $path && git checkout $branch -- &>/dev/null);
-                ANS=$(cd $path && git pull);
+                (cd $path && git checkout $branch -- &>/dev/null)
+                ANS=$(cd $path && git pull)
                 if [[ "$ANS" =~ "Updating" ]]; then
-                    BUILD=true;
+                    BUILD=true
                 fi
             done
         fi
@@ -136,22 +136,22 @@ get_update_path () {
         # Check if docker marked the repository as needing a rebuild
         if [ -f $(basename $path"-update") ]; then
             # Update found, build package
-            BUILD=true;
+            BUILD=true
         fi
     fi
 }
 
 # Set .config file for amd64 and arm64, then remove the dirty kernel build messages
 set_kernel_config () {
-    git config --global user.email "example@example.com";
-    git config --global user.name "l4fame-build-container";
+    git config --global user.email "example@example.com"
+    git config --global user.name "l4fame-build-container"
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-        cp config.l4fame .config;
+        cp config.l4fame .config
     else
-        yes '' | make oldconfig;
+        yes '' | make oldconfig
     fi
-    git add . ;
-    git commit -a -s -m "Removing -dirty";
+    git add . 
+    git commit -a -s -m "Removing -dirty"
 }
 
 
@@ -166,75 +166,75 @@ fi
 # Check if we're running in docker or a chroot
 if [[ $(ls /proc | wc -l) -gt 0 ]]; then
     # Build an arm64 chroot if none exists
-    test -d "/arm64" || qemu-debootstrap --arch=arm64 stretch /arm64/stretch http://deb.debian.org/debian/;
+    test -d "/arm64" || qemu-debootstrap --arch=arm64 stretch /arm64/stretch http://deb.debian.org/debian/
     # Make the directories that gbp will download repositories to and build in
-    mkdir -p /deb;
-    mkdir -p /build;
-    mkdir -p /deb/arm64;
-    mkdir -p /arm64/stretch/deb;
-    mkdir -p /arm64/stretch/build;
+    mkdir -p /deb
+    mkdir -p /build
+    mkdir -p /deb/arm64
+    mkdir -p /arm64/stretch/deb
+    mkdir -p /arm64/stretch/build
     # Mount /deb and /build so we can get at them from inside the chroot
-    mount --bind /deb/arm64 /arm64/stretch/deb;
-    mount --bind /build /arm64/stretch/build;
+    mount --bind /deb/arm64 /arm64/stretch/deb
+    mount --bind /build /arm64/stretch/build
     # Copy signing key into the chroot if available
-    [ -f "/keyfile.key" ] && cp /keyfile.key /arm64/stretch/keyfile.key;
+    [ -f "/keyfile.key" ] && cp /keyfile.key /arm64/stretch/keyfile.key
     # Copy this script into the chroot
-    cp "$0" /arm64/stretch;
+    cp "$0" /arm64/stretch
 fi
 
 # Change into build directory and set the configuration files
-cd /build;
-set_gbp_config;
-set_debuild_config;
+cd /build
+set_gbp_config
+set_debuild_config
 
 
-fix_nvml_rules;
-get_update_path https://github.com/FabricAttachedMemory/nvml.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' );
+fix_nvml_rules
+get_update_path https://github.com/FabricAttachedMemory/nvml.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
 
-get_update_path https://github.com/FabricAttachedMemory/tm-librarian.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
+get_update_path https://github.com/FabricAttachedMemory/tm-librarian.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
 
-get_update_path https://github.com/FabricAttachedMemory/tm-manifesting.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch );
+get_update_path https://github.com/FabricAttachedMemory/tm-manifesting.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch )
 
-get_update_path https://github.com/FabricAttachedMemory/l4fame-node.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
+get_update_path https://github.com/FabricAttachedMemory/l4fame-node.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
 
-get_update_path https://github.com/FabricAttachedMemory/l4fame-manager.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
+get_update_path https://github.com/FabricAttachedMemory/l4fame-manager.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
 
-get_update_path https://github.com/FabricAttachedMemory/tm-hello-world.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
+get_update_path https://github.com/FabricAttachedMemory/tm-hello-world.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
 
-get_update_path https://github.com/FabricAttachedMemory/tm-libfuse.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage );
+get_update_path https://github.com/FabricAttachedMemory/tm-libfuse.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
 
-get_update_path https://github.com/FabricAttachedMemory/libfam-atomic.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-tree=branch );
+get_update_path https://github.com/FabricAttachedMemory/libfam-atomic.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-tree=branch )
 
-get_update_path https://github.com/FabricAttachedMemory/Emulation.git;
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master );
+get_update_path https://github.com/FabricAttachedMemory/Emulation.git
+( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master )
 
 # Copy all the built .deb's to the external deb folder
-cp /gbp-build-area/*.deb /deb;
-cp /gbp-build-area/*.changes /deb;
+cp /gbp-build-area/*.deb /deb
+cp /gbp-build-area/*.changes /deb
 
 
 # Build with config.l4fame in docker and oldconfig in chroot
-get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git;
+get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git
 if $BUILD; then
     ( cd $path && set_kernel_config; make -j$CORES deb-pkg && \
     if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-        touch ../$(basename $(pwd))-update;
+        touch ../$(basename $(pwd))-update
     else
-        rm ../$(basename $(pwd))-update;
-    fi );
-    mv -f /build/linux*.* /gbp-build-area;
+        rm ../$(basename $(pwd))-update
+    fi )
+    mv -f /build/linux*.* /gbp-build-area
     # Sign the linux*.changes file if applicable
-    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" /gbp-build-area/linux*.changes );
-    cp /gbp-build-area/*.deb /deb;
-    cp /gbp-build-area/*.changes /deb;
+    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" /gbp-build-area/linux*.changes )
+    cp /gbp-build-area/*.deb /deb
+    cp /gbp-build-area/*.changes /deb
 fi
 
 # Change into the chroot and run this script
