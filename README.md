@@ -38,9 +38,9 @@ Once the Docker image has been built or downloaded it needs to be run with:
 (depending on the method used to acquire the Docker image)
 
 ```
-docker run -t --name l4fame-builder --privileged -v BUILD:/build -v ~/deb:/deb l4fame-build-container
+docker run -t --name l4fame-builder --privileged -v L4FAME_BUILD:/build -v ~/deb:/deb l4fame-build-container
 
-docker run -t --name l4fame-builder --privileged -v BUILD:/build -v ~/deb:/deb austinhpe/l4fame-build-container
+docker run -t --name l4fame-builder --privileged -v L4FAME_BUILD:/build -v ~/deb:/deb austinhpe/l4fame-build-container
 ```
 
 To disconnect from the container without killing it run `Ctrl+C`
@@ -53,7 +53,7 @@ To reconnect to the container run `docker attach l4fame-builder`
 | `-t` | Allocates and attaches a pseudo-tty, this allows us to background the container without killing it. |
 | `--name l4fame-builder` | Names the container "l4fame-builder" to simplify subsequent runs. |
 | `--privileged` | Gives the container enough privileges to enter a chroot and build arm64 packages. |
-| `-v BUILD:/build` | Creates a new Docker volume named BUILD to hold packages and temporary files as they are being built. |
+| `-v L4FAME_BUILD:/build` | Creates a new Docker volume named L4FAME_BUILD to hold packages and temporary files as they are being built. |
 | `-v ~/deb:/deb` | Mounts a folder to store the finished packages. |
 | `-e cores=number_of_cores` | **Optional Flag** Sets the number of cores used to compile packages. Replace `number_of_cores` with an integer value. If this flag is left off the container will automatically use half the available cpu cores capped at 8. |
 | `-e http_proxy=http://ProxyAddress:PORT`<br>`-e https_proxy=https://ProxyAddress:PORT` | **Optional Flag** Sets the containers `http_proxy` and `https_proxy` variables. This flag needs to be set when this container is running on a machine that requires a proxy to reach the internet. |

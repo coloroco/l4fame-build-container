@@ -146,46 +146,52 @@ function get_update_path() {
     GITPATH=$(/bin/pwd)"/$BNPREFIX"
     [ "$BN" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
 
-    # Check if we're running in docker or a chroot
+    # Only do gitwork in the container.  Bind links will expose it to chroot.
     if inContainer; then
-        # Check if the repository needs to be cloned, then clone
-        if [ ! -d "$GITPATH"  ]; then
+        if [ ! -d "$GITPATH"  ]; then	# First time
             git clone "$REPO"
             DOBUILD=true
-        else
-            # Check if any branch in the repository needs to be updated, then update
-            for branch in $(cd $GITPATH && git branch -r | grep -v HEAD | cut -d'/' -f2); do
-                (cd $GITPATH && git checkout $branch -- &>/dev/null)
-                ANS=$(cd $GITPATH && git pull)
-                if [[ "$ANS" =~ "Updating" ]]; then
-                    DOBUILD=true
-                fi
-            done
-        fi
-    else
-        # Check if docker marked the repository as needing a rebuild
-        if [ -f $(basename $GITPATH"-update") ]; then
+	    return 0
+	fi
+
+        # Update any branches that need it.
+	cd $GITPATH
+        for branch in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
+                git checkout $branch -- &>/dev/null
+                ANS=$(git pull)
+                [[ "$ANS" =~ "Updating" ]] && DOBUILD=true
+        done
+	return 0
+    fi
+    
+    # In chroot: check if docker marked the repository as needing a rebuild
+    if [ -f $(basename $GITPATH"-update") ]; then
             # Update found, build package
             DOBUILD=true
-        fi
     fi
     return 0
 }
 
 ###########################################################################
-# Set .config file for amd64 and arm64, then remove the dirty kernel build
-# messages
 
-function set_kernel_config() {
-    git config --global user.email "example@example.com"
-    git config --global user.name "l4fame-build-container"
+function build_kernel() {
+    cd $GITPATH
+    git checkout mdc/linux-4.14.y || exit 99
     if inContainer; then
-        cp config.l4fame .config
+        cp config.amd64-l4fame .config
+        touch ../$(basename $(pwd))-update
     else
-        yes '' | make oldconfig
+        cp config.arm64-mft .config
+        rm ../$(basename $(pwd))-update
     fi
     git add . 
     git commit -a -s -m "Removing -dirty"
+    make -j$CORES deb-pkg 2>&1 | tee $BUILD/kernel.log
+
+    mv -f $BUILD/linux*.* $GBPOUT	# Keep them with all the others
+
+    # Sign the linux*.changes file if applicable
+    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" $GBPOUT/linux*.changes )
 }
 
 ###########################################################################
@@ -197,6 +203,8 @@ function maybe_build_arm() {
     # build an arm64 chroot if none exists.  The sentinel is the existence of
     # the directory autocreated by the qemu-debootstrap command, ie, don't
     # manually create the directory first.
+
+    apt-get install -y debootstrap qemu-user-static
     [ ! -d $CHROOT ] && qemu-debootstrap \
     	--arch=arm64 $RELEASE $CHROOT http://deb.debian.org/debian/
 
@@ -219,6 +227,9 @@ function maybe_build_arm() {
 # MAIN
 # Set globals and accommodate docker runtime arguments.
 
+echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+date
+
 ARMDIR=/arm
 RELEASE=stretch
 CHROOT=$ARMDIR/$RELEASE
@@ -236,9 +247,17 @@ DEBS=/deb
 CORES=${cores:-}
 [ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
 
-echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-date
-inContainer && echo In container || echo NOT in container
+git config --global user.email "example@example.com"	# for commit -s
+git config --global user.name "l4fame-build-container"
+
+if inContainer; then	 # Create the directories used in "docker run -v"
+    echo In container
+    mkdir -p $BUILD		# Root of the container
+    mkdir -p $DEBS		# Root of the container
+else
+    echo NOT in container
+    # apt-get install -y linux-image-arm64	Austin's first try?
+fi 
 
 SUPPRESSARM=true	# true or false
 
@@ -248,22 +267,7 @@ apt-get update && apt-get upgrade -y
 apt-get install -y git-buildpackage
 apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 
-if inContainer; then
-    $SUPPRESSARM || apt-get install -y debootstrap qemu-user-static
-else
-    apt-get install -y linux-image-arm64
-fi
-
-# Create the directories used in "docker run -v"
-
-if inContainer; then
-    # Make the directories that gbp will download repositories to and build in
-    mkdir -p $BUILD		# Root of the container
-    mkdir -p $DEBS		# Root of the container
-
-fi
-
-# Change into build directory and set the configuration files
+# Change into build directory and set the configuration files, then BUILD!
 cd $BUILD
 set_gbp_config
 set_debuild_config
@@ -296,22 +300,9 @@ fix_nvml_rules
 get_update_path nvml.git
 # ( $DOBUILD ) && ( run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
 
-# Build with config.l4fame in docker and oldconfig in chroot
+# The kernel has its own deb mechanism.
 get_update_path linux-l4fame.git
-if $DOBUILD; then
-    cd $GITPATH
-    set_kernel_config
-    make -j$CORES deb-pkg
-    if inContainer; then
-        touch ../$(basename $(pwd))-update
-    else
-        rm ../$(basename $(pwd))-update
-    fi
-    mv -f $BUILD/linux*.* $GBPOUT	# Keep them with all the others
-
-    # Sign the linux*.changes file if applicable
-    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" $GBPOUT/linux*.changes )
-fi
+( $DOBUILD ) && build_kernel
 
 # That's all, folks!
 cp $GBPOUT/*.deb $DEBS
