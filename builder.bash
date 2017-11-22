@@ -8,11 +8,14 @@ set -u
 # typically a good idea.  https://stackoverflow.com/questions/23513045
 # is more robust.  Of course this depends on grep being in the target
 # environment.  The container always has it, the chroot, maybe not.
+# This breaks down for exec -it bash.   Okay, go back.
 
 function inContainer() {
 	TMP=`grep 2>&1`
-	[[ "$TMP" =~ '.*not found$' ]] && return 1	# no grep
-	return head -1 /proc/1/sched | grep -eq 'init|systemd'
+	[[ "$TMP" =~ '.*not found$' ]] && return 1 # no grep == not container
+	[ ! -d /proc ] && return 1	# again, dodgy
+	[ `ls /proc | wc -l` -gt 0 ]
+	return $?
 }
 
 ###########################################################################
@@ -191,9 +194,8 @@ if inContainer; then
 else
 	echo NOT in container
 fi
-exit 88
 
-export DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND=noninteractive	# Should be in Dockerfile
 
 apt-get update && apt-get upgrade -y
 apt-get install -y git-buildpackage
@@ -207,11 +209,8 @@ fi
 
 # If user sets "-e cores=number_of_cores" use that many cores when compiling
 # Otherwise set $CORES to half the cpu cores.
-if [ "$cores" ]; then
-    CORES=$(( $cores ))
-else
-    CORES=$((( $(nproc) + 1) / 2))
-fi
+CORES=${cores:-}
+[ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
 
 if inContainer; then
     # Build an arm64 chroot if none exists
