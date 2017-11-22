@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
-apt-get update && apt-get upgrade -y
-apt-get install -y git-buildpackage
-apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
-# Check if we're running in docker or a chroot
-if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    # Only needed in the docker container
-    apt-get install -y debootstrap qemu qemu-user-static
-else
-    # Only needed in the arm64 chroot
-    apt-get install -y linux-image-arm64
-fi
 
+set -u
 
+###########################################################################
+# Check if we're running in docker or a chroot.  Counting entries in /proc
+# is dodgy as it depends on NOT bind mounting /proc before the chroot,
+# typically a good idea.  https://stackoverflow.com/questions/23513045
+# is more robust.  Of course this depends on grep being in the target
+# environment.  The container always has it, the chroot, maybe not.
+
+function inContainer() {
+	TMP=`grep 2>&1`
+	[[ "$TMP" =~ '.*not found$' ]] && return 1	# no grep
+	return head -1 /proc/1/sched | grep -eq 'init|systemd'
+}
+
+###########################################################################
 # Sets the configuration file for gbp
-set_gbp_config () {
-# gbp configuration file
-cat <<EOF > $HOME/.gbp.conf
+
+function set_gbp_config () {
+    cat <<EOF > $HOME/.gbp.conf
 [DEFAULT]
 cleaner = fakeroot debian/rules clean
 ignore-new = True
@@ -24,25 +28,27 @@ ignore-new = True
 export-dir = /gbp-build-area/
 
 EOF
-# Insert a postbuild command into the middle of the gbp configuration file
-# This indicates to the arm64 chroot which repositories need to be built
-if [[ $(ls /proc | wc -l) -gt 0 ]]; then
-    # In docker, mark repositories to be built
-    echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
-else
-    # In chroot, mark built repositories
-    echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
-fi
-cat <<EOF >> $HOME/.gbp.conf
+
+    # Insert a postbuild command into the middle of the gbp configuration file
+    # This indicates to the arm64 chroot which repositories need to be built
+    if inContainer; then	# mark repositories to be built
+        echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
+    else
+        # In chroot, mark repositories as already built
+        echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
+    fi
+    cat <<EOF >> $HOME/.gbp.conf
 [git-import-orig]
 dch = False
 EOF
 }
 
-
-# Sets the configuration file for debuild
+###########################################################################
+# Should only be run in the container?
+# Sets the configuration file for debuild.
 # Also checks for a signing key to build packages with
-set_debuild_config () {
+
+function set_debuild_config () {
     # Check for signing key
     if [ -f "/keyfile.key" ]; then
         # Remove old keys, import keyfile.key, get the key uid
@@ -55,11 +61,13 @@ set_debuild_config () {
     fi
 }
 
-
+###########################################################################
 # Check for prerequisite build packages, and install them
 # If there is a branch named "debian", we use that for installing prerequisites
 # Else, use the first branch that contains a folder labeled debian
-run_update () {
+
+function run_update() {
+    cd "$GITPATH"
     if [[ "$(git branch -r | grep -v HEAD | cut -d'/' -f2)" =~ "debian" ]]; then
         git checkout debian -- &>/dev/null
         if [ -d "debian" ]; then
@@ -78,10 +86,11 @@ run_update () {
     fi
 }
 
-
+###########################################################################
 # Builds a new debian/rules file for nvml
-fix_nvml_rules () {
-read -r -d '' rule<<"EOF"
+
+function fix_nvml_rules() {
+    read -r -d '' rule << "EOF"
 #!/usr/bin/make -f
 %:
 \tdh \$@
@@ -103,30 +112,46 @@ override_dh_clean:
 \tfind src/ -name 'config.log' -delete
 \tdh_clean
 EOF
-echo -e "$rule" > /tmp/rules
-chmod +x /tmp/rules
+
+    echo -e "$rule" > /tmp/rules
+    chmod +x /tmp/rules
 }
 
-
-# Sets $path to the path if a build is required or "" if no build is required
+###########################################################################
 # Call with a github repository URL, example:
-# get_update_path https://github.com/FabricAttachedMemory/l4fame-build-container.git
-get_update_path () {
-    # Get a path from the git URL
-    path=$(pwd)"/"$(echo "$1" | cut -d '/' -f 5 | cut -d '.' -f 1)
-    # Until proven otherwise, assume we have to build
+# get_update_path tm-librarian.git
+# will be prepended with GHDEFAULT, or supply a "full git path"
+# get_update_path https://github.com/SomeOtherOrg/SomeOtherRepo.git
+# Sets globals:
+# $GITPATH	absolute path to checked-out code
+# $BUILD	true or false (the executable commands) on whether to build
+
+GHDEFAULT=https://github.com/FabricAttachedMemory
+
+BUILD=		# Set scope
+GITPATH=
+
+function get_update_path() {
     BUILD=false
+    REPO=$1
+    BN=`basename "$REPO"`
+    BNPREFIX=`basename "$BN" .git`	# strip .git off the end
+    [ "$BN" == "$BNPREFIX"] && \
+    	echo "$REPO is not a git reference" >&2 && return 1
+    GITPATH=$(/bin/pwd)"/$BNPREFIX"
+    [ "$BN" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
+
     # Check if we're running in docker or a chroot
-    if [[ $(ls /proc | wc -l) -gt 0 ]]; then
+    if inContainer; then
         # Check if the repository needs to be cloned, then clone
-        if [ ! -d "$path"  ]; then
-            git clone "$1"
+        if [ ! -d "$GITPATH"  ]; then
+            git clone "$REPO"
             BUILD=true
         else
             # Check if any branch in the repository needs to be updated, then update
-            for branch in $(cd $path && git branch -r | grep -v HEAD | cut -d'/' -f2); do
-                (cd $path && git checkout $branch -- &>/dev/null)
-                ANS=$(cd $path && git pull)
+            for branch in $(cd $GITPATH && git branch -r | grep -v HEAD | cut -d'/' -f2); do
+                (cd $GITPATH && git checkout $branch -- &>/dev/null)
+                ANS=$(cd $GITPATH && git pull)
                 if [[ "$ANS" =~ "Updating" ]]; then
                     BUILD=true
                 fi
@@ -134,18 +159,22 @@ get_update_path () {
         fi
     else
         # Check if docker marked the repository as needing a rebuild
-        if [ -f $(basename $path"-update") ]; then
+        if [ -f $(basename $GITPATH"-update") ]; then
             # Update found, build package
             BUILD=true
         fi
     fi
+    return 0
 }
 
-# Set .config file for amd64 and arm64, then remove the dirty kernel build messages
-set_kernel_config () {
+###########################################################################
+# Set .config file for amd64 and arm64, then remove the dirty kernel build
+# messages
+
+function set_kernel_config() {
     git config --global user.email "example@example.com"
     git config --global user.name "l4fame-build-container"
-    if [[ $(ls /proc | wc -l) -gt 0 ]]; then
+    if inContainer; then
         cp config.l4fame .config
     else
         yes '' | make oldconfig
@@ -154,28 +183,52 @@ set_kernel_config () {
     git commit -a -s -m "Removing -dirty"
 }
 
+###########################################################################
+# MAIN
+
+if inContainer; then
+	echo In container
+else
+	echo NOT in container
+fi
+exit 88
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update && apt-get upgrade -y
+apt-get install -y git-buildpackage
+apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
+
+if inContainer; then
+    apt-get install -y debootstrap qemu qemu-user-static
+else
+    apt-get install -y linux-image-arm64
+fi
 
 # If user sets "-e cores=number_of_cores" use that many cores when compiling
+# Otherwise set $CORES to half the cpu cores.
 if [ "$cores" ]; then
     CORES=$(( $cores ))
-# Otherwise set $CORES to half the cpu cores.
 else
     CORES=$((( $(nproc) + 1) / 2))
 fi
 
-# Check if we're running in docker or a chroot
-if [[ $(ls /proc | wc -l) -gt 0 ]]; then
+if inContainer; then
     # Build an arm64 chroot if none exists
-    test -d "/arm64" || qemu-debootstrap --arch=arm64 stretch /arm64/stretch http://deb.debian.org/debian/
+    test -d "/arm64" || qemu-debootstrap \
+    	--arch=arm64 stretch /arm64/stretch http://deb.debian.org/debian/
+
     # Make the directories that gbp will download repositories to and build in
     mkdir -p /deb
     mkdir -p /build
     mkdir -p /deb/arm64
     mkdir -p /arm64/stretch/deb
     mkdir -p /arm64/stretch/build
+
     # Mount /deb and /build so we can get at them from inside the chroot
     mount --bind /deb/arm64 /arm64/stretch/deb
     mount --bind /build /arm64/stretch/build
+
     # Copy signing key into the chroot if available
     [ -f "/keyfile.key" ] && cp /keyfile.key /arm64/stretch/keyfile.key
     # Copy this script into the chroot
@@ -187,57 +240,58 @@ cd /build
 set_gbp_config
 set_debuild_config
 
+get_update_path tm-librarian.git
+( $BUILD ) && ( run_update && gbp buildpackage )
+
+get_update_path l4fame-node.git
+( $BUILD ) && ( run_update && gbp buildpackage )
+
+get_update_path l4fame-manager.git
+( $BUILD ) && ( run_update && gbp buildpackage )
+
+get_update_path tm-hello-world.git
+( $BUILD ) && ( run_update && gbp buildpackage )
+
+get_update_path tm-libfuse.git
+( $BUILD ) && ( run_update && gbp buildpackage )
+
+get_update_path libfam-atomic.git
+( $BUILD ) && ( run_update && gbp buildpackage --git-upstream-tree=branch )
+
+get_update_path tm-manifesting.git
+( $BUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch )
+
+get_update_path Emulation.git
+( $BUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master )
 
 fix_nvml_rules
-get_update_path https://github.com/FabricAttachedMemory/nvml.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
+get_update_path nvml.git
+# ( $BUILD ) && ( run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
 
-get_update_path https://github.com/FabricAttachedMemory/tm-librarian.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
-
-get_update_path https://github.com/FabricAttachedMemory/tm-manifesting.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch )
-
-get_update_path https://github.com/FabricAttachedMemory/l4fame-node.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
-
-get_update_path https://github.com/FabricAttachedMemory/l4fame-manager.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
-
-get_update_path https://github.com/FabricAttachedMemory/tm-hello-world.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
-
-get_update_path https://github.com/FabricAttachedMemory/tm-libfuse.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage )
-
-get_update_path https://github.com/FabricAttachedMemory/libfam-atomic.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-tree=branch )
-
-get_update_path https://github.com/FabricAttachedMemory/Emulation.git
-( $BUILD ) && ( cd $path && run_update && gbp buildpackage --git-upstream-branch=master )
-
-# Copy all the built .deb's to the external deb folder
+# Before doing the kernel, copy all the built .deb's to the external deb folder
 cp /gbp-build-area/*.deb /deb
 cp /gbp-build-area/*.changes /deb
 
-
 # Build with config.l4fame in docker and oldconfig in chroot
-get_update_path https://github.com/FabricAttachedMemory/linux-l4fame.git
+get_update_path linux-l4fame.git
 if $BUILD; then
-    ( cd $path && set_kernel_config; make -j$CORES deb-pkg && \
-    if [[ $(ls /proc | wc -l) -gt 0 ]]; then
+    cd $GITPATH
+    set_kernel_config
+    make -j$CORES deb-pkg
+    if inContainer; then
         touch ../$(basename $(pwd))-update
     else
         rm ../$(basename $(pwd))-update
-    fi )
+    fi
     mv -f /build/linux*.* /gbp-build-area
+
     # Sign the linux*.changes file if applicable
     [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" /gbp-build-area/linux*.changes )
     cp /gbp-build-area/*.deb /deb
     cp /gbp-build-area/*.changes /deb
 fi
 
-# Change into the chroot and run this script
-if [[ $(ls /proc | wc -l) -gt 0 ]]; then
+# Possibly chain this script into the ARM chroot
+if inContainer; then
     chroot /arm64/stretch "/$(basename $0)" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
 fi
