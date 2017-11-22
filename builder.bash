@@ -21,6 +21,8 @@ function inContainer() {
 ###########################################################################
 # Sets the configuration file for gbp
 
+GBPOUT=/gbp-build-area/
+
 function set_gbp_config () {
     cat <<EOF > $HOME/.gbp.conf
 [DEFAULT]
@@ -28,7 +30,7 @@ cleaner = fakeroot debian/rules clean
 ignore-new = True
 
 [buildpackage]
-export-dir = /gbp-build-area/
+export-dir = $GBPOUT
 
 EOF
 
@@ -53,10 +55,10 @@ EOF
 
 function set_debuild_config () {
     # Check for signing key
-    if [ -f "/keyfile.key" ]; then
-        # Remove old keys, import keyfile.key, get the key uid
+    if [ -f $KEYFILE ]; then
+        # Remove old keys, import new one, get the key uid
         rm -r $HOME/.gnupg
-        gpg --import /keyfile.key
+        gpg --import $KEYFILE
         GPGID=$(gpg -K | grep uid | cut -d] -f2)
         echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -b -i -j$CORES\"" > $HOME/.devscripts
     else
@@ -126,20 +128,20 @@ EOF
 # will be prepended with GHDEFAULT, or supply a "full git path"
 # get_update_path https://github.com/SomeOtherOrg/SomeOtherRepo.git
 # Sets globals:
+# $DOBUILD	true or false (the executable commands) on whether to build
 # $GITPATH	absolute path to checked-out code
-# $BUILD	true or false (the executable commands) on whether to build
 
 GHDEFAULT=https://github.com/FabricAttachedMemory
 
-BUILD=		# Set scope
+DOBUILD=	# Set scope
 GITPATH=
 
 function get_update_path() {
-    BUILD=false
+    DOBUILD=false
     REPO=$1
     BN=`basename "$REPO"`
     BNPREFIX=`basename "$BN" .git`	# strip .git off the end
-    [ "$BN" == "$BNPREFIX"] && \
+     [ "$BN" == "$BNPREFIX" ] && \
     	echo "$REPO is not a git reference" >&2 && return 1
     GITPATH=$(/bin/pwd)"/$BNPREFIX"
     [ "$BN" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
@@ -149,14 +151,14 @@ function get_update_path() {
         # Check if the repository needs to be cloned, then clone
         if [ ! -d "$GITPATH"  ]; then
             git clone "$REPO"
-            BUILD=true
+            DOBUILD=true
         else
             # Check if any branch in the repository needs to be updated, then update
             for branch in $(cd $GITPATH && git branch -r | grep -v HEAD | cut -d'/' -f2); do
                 (cd $GITPATH && git checkout $branch -- &>/dev/null)
                 ANS=$(cd $GITPATH && git pull)
                 if [[ "$ANS" =~ "Updating" ]]; then
-                    BUILD=true
+                    DOBUILD=true
                 fi
             done
         fi
@@ -164,7 +166,7 @@ function get_update_path() {
         # Check if docker marked the repository as needing a rebuild
         if [ -f $(basename $GITPATH"-update") ]; then
             # Update found, build package
-            BUILD=true
+            DOBUILD=true
         fi
     fi
     return 0
@@ -187,13 +189,58 @@ function set_kernel_config() {
 }
 
 ###########################################################################
-# MAIN
+# Possibly create an arm chroot, fix it up, and run this script inside  it.
 
-if inContainer; then
-	echo In container
-else
-	echo NOT in container
-fi
+function maybe_build_arm() {
+    $SUPPRESSARM && return 1
+
+    # build an arm64 chroot if none exists.  The sentinel is the existence of
+    # the directory autocreated by the qemu-debootstrap command, ie, don't
+    # manually create the directory first.
+    [ ! -d $CHROOT ] && qemu-debootstrap \
+    	--arch=arm64 $RELEASE $CHROOT http://deb.debian.org/debian/
+
+    mkdir $CHROOT$BUILD		# Root of the chroot
+    mkdir $CHROOT$DEBS		# Root of the chroot
+
+    # Bind mounts allow access from inside the chroot
+    mount --bind $BUILD $CHROOT$BUILD		# ie, the git checkout area
+    mkdir -p $DEBS/arm64
+    mount --bind $DEBS/arm64 $CHROOT$DEBS	# ARM debs also visible
+
+    [ -f $KEYFILE ] && cp $KEYFILE $CHROOT
+
+    cp "$0" $CHROOT
+    chroot $CHROOT "/$(basename $0)" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
+    return $?
+}
+
+###########################################################################
+# MAIN
+# Set globals and accommodate docker runtime arguments.
+
+ARMDIR=/arm
+RELEASE=stretch
+CHROOT=$ARMDIR/$RELEASE
+KEYFILE=/keyfile.key		# optional
+GPGID=
+
+# "docker run ... -v ...". They are the same from both the container and 
+# the chroot.
+
+BUILD=/build
+DEBS=/deb
+
+# If user sets "docker run ... -e cores=N" use that many cores when 
+# compiling kernel, else use half the available cores.
+CORES=${cores:-}
+[ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
+
+echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+date
+inContainer && echo In container || echo NOT in container
+
+SUPPRESSARM=true	# true or false
 
 export DEBIAN_FRONTEND=noninteractive	# Should be in Dockerfile
 
@@ -202,78 +249,56 @@ apt-get install -y git-buildpackage
 apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 
 if inContainer; then
-    apt-get install -y debootstrap qemu qemu-user-static
+    $SUPPRESSARM || apt-get install -y debootstrap qemu-user-static
 else
     apt-get install -y linux-image-arm64
 fi
 
-# If user sets "-e cores=number_of_cores" use that many cores when compiling
-# Otherwise set $CORES to half the cpu cores.
-CORES=${cores:-}
-[ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
+# Create the directories used in "docker run -v"
 
 if inContainer; then
-    # Build an arm64 chroot if none exists
-    test -d "/arm64" || qemu-debootstrap \
-    	--arch=arm64 stretch /arm64/stretch http://deb.debian.org/debian/
-
     # Make the directories that gbp will download repositories to and build in
-    mkdir -p /deb
-    mkdir -p /build
-    mkdir -p /deb/arm64
-    mkdir -p /arm64/stretch/deb
-    mkdir -p /arm64/stretch/build
+    mkdir -p $BUILD		# Root of the container
+    mkdir -p $DEBS		# Root of the container
 
-    # Mount /deb and /build so we can get at them from inside the chroot
-    mount --bind /deb/arm64 /arm64/stretch/deb
-    mount --bind /build /arm64/stretch/build
-
-    # Copy signing key into the chroot if available
-    [ -f "/keyfile.key" ] && cp /keyfile.key /arm64/stretch/keyfile.key
-    # Copy this script into the chroot
-    cp "$0" /arm64/stretch
 fi
 
 # Change into build directory and set the configuration files
-cd /build
+cd $BUILD
 set_gbp_config
 set_debuild_config
 
-get_update_path tm-librarian.git
-( $BUILD ) && ( run_update && gbp buildpackage )
-
 get_update_path l4fame-node.git
-( $BUILD ) && ( run_update && gbp buildpackage )
+( $DOBUILD ) && ( run_update && gbp buildpackage )
 
 get_update_path l4fame-manager.git
-( $BUILD ) && ( run_update && gbp buildpackage )
-
-get_update_path tm-hello-world.git
-( $BUILD ) && ( run_update && gbp buildpackage )
+( $DOBUILD ) && ( run_update && gbp buildpackage )
 
 get_update_path tm-libfuse.git
-( $BUILD ) && ( run_update && gbp buildpackage )
+( $DOBUILD ) && ( run_update && gbp buildpackage )
+
+get_update_path tm-librarian.git
+( $DOBUILD ) && ( run_update && gbp buildpackage )
+
+get_update_path tm-hello-world.git
+( $DOBUILD ) && ( run_update && gbp buildpackage )
 
 get_update_path libfam-atomic.git
-( $BUILD ) && ( run_update && gbp buildpackage --git-upstream-tree=branch )
+( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-tree=branch )
 
 get_update_path tm-manifesting.git
-( $BUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch )
+( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch )
 
 get_update_path Emulation.git
-( $BUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master )
+( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master )
 
 fix_nvml_rules
 get_update_path nvml.git
-# ( $BUILD ) && ( run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
-
-# Before doing the kernel, copy all the built .deb's to the external deb folder
-cp /gbp-build-area/*.deb /deb
-cp /gbp-build-area/*.changes /deb
+# ( $DOBUILD ) && ( run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
 
 # Build with config.l4fame in docker and oldconfig in chroot
 get_update_path linux-l4fame.git
-if $BUILD; then
+if $DOBUILD; then
     cd $GITPATH
     set_kernel_config
     make -j$CORES deb-pkg
@@ -282,15 +307,19 @@ if $BUILD; then
     else
         rm ../$(basename $(pwd))-update
     fi
-    mv -f /build/linux*.* /gbp-build-area
+    mv -f $BUILD/linux*.* $GBPOUT	# Keep them with all the others
 
     # Sign the linux*.changes file if applicable
-    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" /gbp-build-area/linux*.changes )
-    cp /gbp-build-area/*.deb /deb
-    cp /gbp-build-area/*.changes /deb
+    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" $GBPOUT/linux*.changes )
 fi
 
-# Possibly chain this script into the ARM chroot
-if inContainer; then
-    chroot /arm64/stretch "/$(basename $0)" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
-fi
+# That's all, folks!
+cp $GBPOUT/*.deb $DEBS
+cp $GBPOUT/*.changes $DEBS
+
+# But wait there's more!
+inContainer && maybe_build_arm
+
+echo "Finished at `date`"
+
+exit 0
