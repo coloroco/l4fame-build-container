@@ -180,6 +180,12 @@ function build_kernel() {
     if inContainer; then
         cp config.amd64-l4fame .config
         touch ../$(basename $(pwd))-update
+
+	# November 2017: stretch has gcc 6.3.0 and it picks up an error in
+	# fam-atomic and I need this for Discover and FAME.  Greg will
+	# probably fix it in time, but until then:
+	sed -ie 's/CONFIG_FAM_ATOMIC=m/CONFIG_FAM_ATOMIC=n/' .config
+
     else
         cp config.arm64-mft .config
         rm ../$(basename $(pwd))-update
@@ -227,13 +233,13 @@ function maybe_build_arm() {
 # MAIN
 # Set globals and accommodate docker runtime arguments.
 
+
 echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 date
 
 ARMDIR=/arm
 RELEASE=stretch
 CHROOT=$ARMDIR/$RELEASE
-KEYFILE=/keyfile.key		# optional
 GPGID=
 
 # "docker run ... -v ...". They are the same from both the container and 
@@ -241,11 +247,18 @@ GPGID=
 
 BUILD=/build
 DEBS=/deb
+KEYFILE=/keyfile.key		# optional
 
-# If user sets "docker run ... -e cores=N" use that many cores when 
-# compiling kernel, else use half the available cores.
+# "docker run ... -e cores=N" or suppressarm=false
 CORES=${cores:-}
 [ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
+SUPPRESSARM=${suppressarm:-true}	# true or false
+
+for E in CORES SUPPRESSARM; do
+	echo "$E=${$E}"
+done
+
+# Other setup tasks
 
 git config --global user.email "example@example.com"	# for commit -s
 git config --global user.name "l4fame-build-container"
@@ -259,15 +272,13 @@ else
     # apt-get install -y linux-image-arm64	Austin's first try?
 fi 
 
-SUPPRESSARM=true	# true or false
-
 export DEBIAN_FRONTEND=noninteractive	# Should be in Dockerfile
 
 apt-get update && apt-get upgrade -y
 apt-get install -y git-buildpackage
 apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 
-# Change into build directory and set the configuration files, then BUILD!
+# Change into build directory, set the configuration files, then BUILD!
 cd $BUILD
 set_gbp_config
 set_debuild_config
@@ -296,9 +307,11 @@ get_update_path tm-manifesting.git
 get_update_path Emulation.git
 ( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master )
 
+exit 0
+
 fix_nvml_rules
 get_update_path nvml.git
-# ( $DOBUILD ) && ( run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
+( $DOBUILD ) && ( run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
 
 # The kernel has its own deb mechanism.
 get_update_path linux-l4fame.git
