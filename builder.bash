@@ -143,10 +143,10 @@ function get_update_path() {
     BNPREFIX=`basename "$BN" .git`	# strip .git off the end
      [ "$BN" == "$BNPREFIX" ] && \
     	echo "$REPO is not a git reference" >&2 && return 1
-    GITPATH=$(/bin/pwd)"/$BNPREFIX"
+    GITPATH="$BUILD/$BNPREFIX"
     [ "$BN" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
 
-    # Only do gitwork in the container.  Bind links will expose it to chroot.
+    # Only do git work in the container.  Bind links will expose it to chroot.
     if inContainer; then
         if [ ! -d "$GITPATH"  ]; then	# First time
             git clone "$REPO"
@@ -175,9 +175,14 @@ function get_update_path() {
 ###########################################################################
 
 function build_kernel() {
+    echo "cd to $GITPATH"
     cd $GITPATH
     git checkout mdc/linux-4.14.y || exit 99
+    /bin/pwd
+    git status
+
     if inContainer; then
+	echo KERNEL BUILD IN CONTAINER
         cp config.amd64-l4fame .config
         touch ../$(basename $(pwd))-update
 
@@ -192,8 +197,10 @@ function build_kernel() {
     fi
     git add . 
     git commit -a -s -m "Removing -dirty"
+    echo "Now at `/bin/pwd` ready to make"
     make -j$CORES deb-pkg 2>&1 | tee $BUILD/kernel.log
 
+    # They end up one above $GITPATH???
     mv -f $BUILD/linux*.* $GBPOUT	# Keep them with all the others
 
     # Sign the linux*.changes file if applicable
@@ -255,7 +262,8 @@ CORES=${cores:-}
 SUPPRESSARM=${suppressarm:-true}	# true or false
 
 for E in CORES SUPPRESSARM; do
-	echo "$E=${$E}"
+	eval VAL=\$$E
+	echo "$E=$VAL"
 done
 
 # Other setup tasks
@@ -306,8 +314,6 @@ get_update_path tm-manifesting.git
 
 get_update_path Emulation.git
 ( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master )
-
-exit 0
 
 fix_nvml_rules
 get_update_path nvml.git
