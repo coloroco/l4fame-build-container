@@ -95,7 +95,11 @@ function get_build_prerequisites() {
 	[ "$BRANCH" ] || die "No branch has a 'debian' directory"
     fi
     echo get_build_prerequisites found "debian" directory in $BRANCH
-    dpkg-checkbuilddeps &>/dev/null || ( echo "y" | mk-build-deps -i -r )
+    if [ -e debian/rules ]; then
+    	dpkg-checkbuilddeps >/dev/null 2>&1 || (echo "y" | mk-build-deps -i -r)
+    else
+    	echo "Branch $BRANCH has no 'debian/rules'"
+    fi
 }
 
 ###########################################################################
@@ -172,8 +176,8 @@ function get_update_path() {
     	# In chroot: check if container path above left a sentinel.
     	[ -f $(basename "$GITPATH-update") ] && RUN_UPDATE=yes
     fi
-    [ "$RUN_UPDATE" ] && get_build_prerequisites	# returns or dies
-    return 0
+    get_build_prerequisites
+    return $?
 }
 
 ###########################################################################
@@ -314,23 +318,20 @@ get_update_path tm-librarian.git && gbp buildpackage
 get_update_path tm-hello-world.git && gbp buildpackage
 
 get_update_path libfam-atomic.git && \
-	gbp buildpackage --git-upstream-tree=branch
+    gbp buildpackage --git-upstream-tree=branch
 
-exit 43
+get_update_path tm-manifesting.git && \
+    gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
 
-get_update_path tm-manifesting.git
-( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch )
-
-get_update_path Emulation.git
-( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master )
+get_update_path Emulation.git && \
+    gbp buildpackage --git-upstream-branch=master
 
 fix_nvml_rules
-get_update_path nvml.git
-( $DOBUILD ) && ( run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
+get_update_path nvml.git && \
+    gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules'
 
 # The kernel has its own deb build mechanism.
-get_update_path linux-l4fame.git
-( $DOBUILD ) && build_kernel
+get_update_path linux-l4fame.git && build_kernel
 
 # That's all, folks!
 cp $GBPOUT/*.deb $DEBS
