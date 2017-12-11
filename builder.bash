@@ -3,6 +3,13 @@
 set -u
 
 ###########################################################################
+
+function die() {
+	echo "$*" >&2
+	exit 1
+}
+
+###########################################################################
 # Check if we're running in docker or a chroot.  Counting entries in /proc
 # is dodgy as it depends on NOT bind mounting /proc before the chroot,
 # typically a good idea.  https://stackoverflow.com/questions/23513045
@@ -67,28 +74,28 @@ function set_debuild_config () {
 }
 
 ###########################################################################
-# Check for prerequisite build packages, and install them
-# If there is a branch named "debian", we use that for installing prerequisites
-# Else, use the first branch that contains a folder labeled debian
+# If there is a branch named "debian", use that;
+# Else use the first branch that contains a folder labeled debian;
+# Else die.
+# Finally, check for prerequisite build packages, and install them
 
-function run_update() {
+function get_build_prerequisites() {
+    echo get_build_prerequisites $GITPATH
     cd "$GITPATH"
     if [[ "$(git branch -r | grep -v HEAD | cut -d'/' -f2)" =~ "debian" ]]; then
         git checkout debian -- &>/dev/null
-        if [ -d "debian" ]; then
-            ( dpkg-checkbuilddeps &>/dev/null ) || \
-            ( echo "y" | mk-build-deps -i -r )
-        fi
+        [ -d "debian" ] || die "'debian' branch has no 'debian' directory"
+	BRANCH=debian
     else
-        for branch in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
-            git checkout $branch -- &>/dev/null
-            if [ -d "debian" ]; then
-                ( dpkg-checkbuilddeps &>/dev/null ) || \
-                ( echo "y" | mk-build-deps -i -r )
-                break
-            fi
+        for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
+            git checkout $BRANCH -- &>/dev/null
+            [ -d "debian" ] && break
+	    BRANCH=	# sentinel for exhausting the loop
         done
+	[ "$BRANCH" ] || die "No branch has a 'debian' directory"
     fi
+    echo get_build_prerequisites found "debian" directory in $BRANCH
+    dpkg-checkbuilddeps &>/dev/null || ( echo "y" | mk-build-deps -i -r )
 }
 
 ###########################################################################
@@ -128,20 +135,21 @@ EOF
 # will be prepended with GHDEFAULT, or supply a "full git path"
 # get_update_path https://github.com/SomeOtherOrg/SomeOtherRepo.git
 # Sets globals:
-# $DOBUILD	true or false (the executable commands) on whether to build
-# $GITPATH	absolute path to checked-out code
+# $GITPATH	absolute path to code, will be working dir on success
 
 GHDEFAULT=https://github.com/FabricAttachedMemory
 
-DOBUILD=	# Set scope
-GITPATH=
+GITPATH=/nada	# Set scope
 
 function get_update_path() {
-    DOBUILD=false
     REPO=$1
+    RUN_UPDATE=
+    echo '-----------------------------------------------------------------'
+    echo get_update_path $REPO
+
     BN=`basename "$REPO"`
     BNPREFIX=`basename "$BN" .git`	# strip .git off the end
-     [ "$BN" == "$BNPREFIX" ] && \
+    [ "$BN" == "$BNPREFIX" ] && \
     	echo "$REPO is not a git reference" >&2 && return 1
     GITPATH="$BUILD/$BNPREFIX"
     [ "$BN" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
@@ -149,27 +157,31 @@ function get_update_path() {
     # Only do git work in the container.  Bind links will expose it to chroot.
     if inContainer; then
         if [ ! -d "$GITPATH"  ]; then	# First time
-            git clone "$REPO"
-            DOBUILD=true
-	    return 0
-	fi
-
-        # Update any branches that need it.
-	cd $GITPATH
-        for branch in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
+	    cd $BUILD
+            git clone "$REPO" || die "git clone $REPO failed"
+	    [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
+	else			# Update any branches that need it.
+	    cd $GITPATH
+            for branch in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
                 git checkout $branch -- &>/dev/null
                 ANS=$(git pull)
-                [[ "$ANS" =~ "Updating" ]] && DOBUILD=true
-        done
-	return 0
+                [[ "$ANS" =~ "Updating" ]] && RUN_UPDATE=yes && break
+            done
+	fi
+    else
+    	# In chroot: check if container path above left a sentinel.
+    	[ -f $(basename "$GITPATH-update") ] && RUN_UPDATE=yes
     fi
-    
-    # In chroot: check if docker marked the repository as needing a rebuild
-    if [ -f $(basename $GITPATH"-update") ]; then
-            # Update found, build package
-            DOBUILD=true
-    fi
+    [ "$RUN_UPDATE" ] && get_build_prerequisites	# returns or dies
     return 0
+}
+
+###########################################################################
+# Depends on a correct $GITPATH
+
+function build_via_gbp() {
+    shift
+    GBPARGS="$*"
 }
 
 ###########################################################################
@@ -291,23 +303,20 @@ cd $BUILD
 set_gbp_config
 set_debuild_config
 
-get_update_path l4fame-node.git
-( $DOBUILD ) && ( run_update && gbp buildpackage )
+get_update_path l4fame-node.git && gbp buildpackage
 
-get_update_path l4fame-manager.git
-( $DOBUILD ) && ( run_update && gbp buildpackage )
+get_update_path l4fame-manager.git && gbp buildpackage
 
-get_update_path tm-libfuse.git
-( $DOBUILD ) && ( run_update && gbp buildpackage )
+get_update_path tm-libfuse.git && gbp buildpackage
 
-get_update_path tm-librarian.git
-( $DOBUILD ) && ( run_update && gbp buildpackage )
+get_update_path tm-librarian.git && gbp buildpackage
 
-get_update_path tm-hello-world.git
-( $DOBUILD ) && ( run_update && gbp buildpackage )
+get_update_path tm-hello-world.git && gbp buildpackage
 
-get_update_path libfam-atomic.git
-( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-tree=branch )
+get_update_path libfam-atomic.git && \
+	gbp buildpackage --git-upstream-tree=branch
+
+exit 43
 
 get_update_path tm-manifesting.git
 ( $DOBUILD ) && ( run_update && gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch )
@@ -319,7 +328,7 @@ fix_nvml_rules
 get_update_path nvml.git
 ( $DOBUILD ) && ( run_update && gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules' )
 
-# The kernel has its own deb mechanism.
+# The kernel has its own deb build mechanism.
 get_update_path linux-l4fame.git
 ( $DOBUILD ) && build_kernel
 
