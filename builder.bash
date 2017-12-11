@@ -191,7 +191,6 @@ function build_via_gbp() {
 ###########################################################################
 
 function build_kernel() {
-    echo "cd to $GITPATH"
     cd $GITPATH
     git checkout mdc/linux-4.14.y || exit 99
     /bin/pwd
@@ -331,7 +330,8 @@ get_update_path nvml.git && \
     gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules'
 
 # The kernel has its own deb build mechanism.
-get_update_path linux-l4fame.git && build_kernel
+get_update_path linux-l4fame.git
+build_kernel
 
 # That's all, folks!
 cp $GBPOUT/*.deb $DEBS
