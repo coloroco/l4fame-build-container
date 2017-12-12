@@ -1,21 +1,39 @@
 #!/usr/bin/env bash
 
+# This gets copied into a container image and run.  Multiple repos are
+# pulled from Github and Debian x86_64 packages created from them.  The
+# resulting .deb files are deposited in the "debs" volume from the
+# "docker run" command.  Log files for each package build can also be
+# found there.  ARM packages may be built depending on SUPPRESSARM.
+
+SUPPRESSARM=${suppressarm:-true}	# true or false
+
 set -u
 
 ###########################################################################
+# Convenience routines.
 
 function log() {
-	if [ "$LOGFILE" ]; then
-		echo "$*" | tee -a $LOGFILE
-	else
-		echo "$*"
-	fi
+	echo "$*" | tee -a $LOGFILE
 }
 
 function die() {
 	log "$*"
 	echo "$*" >&2
 	exit 1
+}
+
+###########################################################################
+# Must be called immediately after a command or pipeline of interest.
+# Warnings are done manually for now and indicate something odd that
+# doesn't seem to prevent success.
+
+declare -a ERRORS WARNINGS
+
+function collect_errors() {
+    let SUM=`sed 's/ /+/g' <<< "${PIPESTATUS[@]}"`
+    [ $SUM -ne 0 ] && ERRORS+=("$SUM error(s) in a pipeline of $GITPATH")
+    return $SUM
 }
 
 ###########################################################################
@@ -103,15 +121,20 @@ function get_build_prerequisites() {
 	    BRANCH=	# sentinel for exhausting the loop
         done
 	if [ "$BRANCH" ]; then
-	    log "NO BRANCH HAS A 'debian' DIRECTORY!!!"
+	    MSG="NO BRANCH OF $GITPATH HAS A 'debian' DIRECTORY!!!"
+	    log $MSG
+	    WARNINGS+=("$MSG")	# for example,kernel doesn't care
 	    return
 	fi
     fi
     log get_build_prerequisites found "debian" directory in $BRANCH
     if [ -e debian/rules ]; then
     	dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
+	collect_errors
     else
-    	log "Branch $BRANCH is missing 'debian/rules'"
+    	MSG="$GITPATH branch $BRANCH is missing 'debian/rules'"
+	log $MSG
+	ERRORS+=("$MSG")
     fi
 }
 
@@ -154,9 +177,9 @@ EOF
 # Sets globals:
 # $GITPATH	absolute path to code, will be working dir on success
 
-GHDEFAULT=https://github.com/FabricAttachedMemory
+readonly GHDEFAULT=https://github.com/FabricAttachedMemory
 
-GITPATH=/nada	# Set scope
+GITPATH="Main program"	# Set scope
 
 function get_update_path() {
     REPO=$1
@@ -204,6 +227,7 @@ function build_via_gbp() {
     cd $GITPATH
     log "$GITPATH args: $GBPARGS"
     eval "gbp buildpackage $GBPARGS" 2>&1 | tee -a $LOGFILE
+    collect_errors
 }
 
 ###########################################################################
@@ -232,6 +256,7 @@ function build_kernel() {
     git commit -a -s -m "Removing -dirty"
     log "Now at `/bin/pwd` ready to make"
     make -j$CORES deb-pkg 2>&1 | tee -a $LOGFILE
+    collect_errors
 
     # They end up one above $GITPATH???
     mv -f $BUILD/linux*.* $GBPOUT	# Keep them with all the others
@@ -273,18 +298,19 @@ function maybe_build_arm() {
 # MAIN
 # Set globals and accommodate docker runtime arguments.
 
-ARMDIR=/arm
-RELEASE=stretch
-CHROOT=$ARMDIR/$RELEASE
+readonly ARMDIR=/arm
+readonly RELEASE=stretch
+readonly CHROOT=$ARMDIR/$RELEASE
 GPGID=
 
 # "docker run ... -v ...". They are the same from both the container and 
 # the chroot.
 
-BUILD=/build
-DEBS=/deb
-KEYFILE=/keyfile.key		# optional
-LOGDIR=$DEBS/logs
+readonly BUILD=/build
+readonly DEBS=/deb
+readonly KEYFILE=/keyfile.key		# optional
+readonly LOGDIR=$DEBS/logs
+
 rm -rf $LOGDIR
 mkdir -p $LOGDIR
 LOGFILE=$LOGDIR/1st.log		# Reset for each package; establish scope now.
@@ -295,7 +321,6 @@ date | tee -a $LOGFILE
 # "docker run ... -e cores=N" or suppressarm=false
 CORES=${cores:-}
 [ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
-SUPPRESSARM=${suppressarm:-true}	# true or false
 
 for E in CORES SUPPRESSARM; do
 	eval VAL=\$$E
@@ -344,19 +369,29 @@ get_update_path Emulation.git && \
 
 fix_nvml_rules
 get_update_path nvml.git && \
-    build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
+    build_via_gbp "--git-prebuild='mvvv -f /tmp/rules debian/rules'"
 
 # The kernel has its own deb build mechanism.
 get_update_path linux-l4fame.git
 build_kernel
 
-# That's all, folks!
+#--------------------------------------------------------------------------
+# That's all, folks!  Move what worked.
+
 cp $GBPOUT/*.deb $DEBS
 cp $GBPOUT/*.changes $DEBS
 
+echo "Finished at `date`"
+
+echo -e "\nWARNINGS:"
+for (( I=0; I < ${#WARNINGS[@]}; I++ )); do echo ${WARNINGS[$I]}; done
+
+echo -e "\nERRORS:"
+for (( I=0; I < ${#ERRORS[@]}; I++ )); do echo ${ERRORS[$I]}; done
+
+[ ${#ERRORS[@]} -ne 0 ] && die "Error(s) occurred"
+
 # But wait there's more!
 inContainer && maybe_build_arm
-
-echo "Finished at `date`"
 
 exit 0
