@@ -4,7 +4,16 @@ set -u
 
 ###########################################################################
 
+function log() {
+	if [ "$LOGFILE" ]; then
+		echo "$*" | tee -a $LOGFILE
+	else
+		echo "$*"
+	fi
+}
+
 function die() {
+	log "$*"
 	echo "$*" >&2
 	exit 1
 }
@@ -77,10 +86,11 @@ function set_debuild_config () {
 # If there is a branch named "debian", use that;
 # Else use the first branch that contains a folder labeled debian;
 # Else die.
-# Finally, check for prerequisite build packages, and install them
+# Finally, check for prerequisite build packages, and install them as needed.
+# Assumes LOGFILE is set.
 
 function get_build_prerequisites() {
-    echo get_build_prerequisites $GITPATH
+    log get_build_prerequisites $GITPATH
     cd "$GITPATH"
     if [[ "$(git branch -r | grep -v HEAD | cut -d'/' -f2)" =~ "debian" ]]; then
         git checkout debian -- &>/dev/null
@@ -92,13 +102,16 @@ function get_build_prerequisites() {
             [ -d "debian" ] && break
 	    BRANCH=	# sentinel for exhausting the loop
         done
-	[ "$BRANCH" ] || die "No branch has a 'debian' directory"
+	if [ "$BRANCH" ]; then
+	    log "NO BRANCH HAS A 'debian' DIRECTORY!!!"
+	    return
+	fi
     fi
-    echo get_build_prerequisites found "debian" directory in $BRANCH
+    log get_build_prerequisites found "debian" directory in $BRANCH
     if [ -e debian/rules ]; then
-    	dpkg-checkbuilddeps >/dev/null 2>&1 || (echo "y" | mk-build-deps -i -r)
+    	dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
     else
-    	echo "Branch $BRANCH has no 'debian/rules'"
+    	log "Branch $BRANCH is missing 'debian/rules'"
     fi
 }
 
@@ -147,14 +160,15 @@ GITPATH=/nada	# Set scope
 
 function get_update_path() {
     REPO=$1
+    BN=`basename "$REPO"`
+    LOGFILE=$LOGDIR/$BN.log
     RUN_UPDATE=
     echo '-----------------------------------------------------------------'
-    echo get_update_path $REPO
+    log get_update_path $REPO
 
-    BN=`basename "$REPO"`
     BNPREFIX=`basename "$BN" .git`	# strip .git off the end
     [ "$BN" == "$BNPREFIX" ] && \
-    	echo "$REPO is not a git reference" >&2 && return 1
+    	log "$REPO is not a git reference" && return 1
     GITPATH="$BUILD/$BNPREFIX"
     [ "$BN" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
 
@@ -162,14 +176,16 @@ function get_update_path() {
     if inContainer; then
         if [ ! -d "$GITPATH"  ]; then	# First time
 	    cd $BUILD
+	    log Cloning $REPO
             git clone "$REPO" || die "git clone $REPO failed"
 	    [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
 	else			# Update any branches that need it.
 	    cd $GITPATH
-            for branch in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
-                git checkout $branch -- &>/dev/null
+            for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
+	        log Checking branch $BRANCH for updates
+                git checkout $BRANCH -- &>/dev/null
                 ANS=$(git pull)
-                [[ "$ANS" =~ "Updating" ]] && RUN_UPDATE=yes && break
+                [[ "$ANS" =~ "Updating" ]] && RUN_UPDATE=yes # && break
             done
 	fi
     else
@@ -181,14 +197,17 @@ function get_update_path() {
 }
 
 ###########################################################################
-# Depends on a correct $GITPATH
+# Depends on a correct $GITPATH, branch, and $LOGFILE being preselected.
 
 function build_via_gbp() {
-    shift
     GBPARGS="$*"
+    cd $GITPATH
+    log "$GITPATH args: $GBPARGS"
+    eval "gbp buildpackage $GBPARGS" 2>&1 | tee -a $LOGFILE
 }
 
 ###########################################################################
+# Assumes LOGFILE is set
 
 function build_kernel() {
     cd $GITPATH
@@ -197,7 +216,7 @@ function build_kernel() {
     git status
 
     if inContainer; then
-	echo KERNEL BUILD IN CONTAINER
+	log KERNEL BUILD IN CONTAINER
         cp config.amd64-l4fame .config
         touch ../$(basename $(pwd))-update
 
@@ -205,15 +224,14 @@ function build_kernel() {
 	# fam-atomic and I need this for Discover and FAME.  Greg will
 	# probably fix it in time, but until then:
 	sed -ie 's/CONFIG_FAM_ATOMIC=m/CONFIG_FAM_ATOMIC=n/' .config
-
     else
         cp config.arm64-mft .config
         rm ../$(basename $(pwd))-update
     fi
     git add . 
     git commit -a -s -m "Removing -dirty"
-    echo "Now at `/bin/pwd` ready to make"
-    make -j$CORES deb-pkg 2>&1 | tee $BUILD/kernel.log
+    log "Now at `/bin/pwd` ready to make"
+    make -j$CORES deb-pkg 2>&1 | tee -a $LOGFILE
 
     # They end up one above $GITPATH???
     mv -f $BUILD/linux*.* $GBPOUT	# Keep them with all the others
@@ -255,10 +273,6 @@ function maybe_build_arm() {
 # MAIN
 # Set globals and accommodate docker runtime arguments.
 
-
-echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-date
-
 ARMDIR=/arm
 RELEASE=stretch
 CHROOT=$ARMDIR/$RELEASE
@@ -270,6 +284,13 @@ GPGID=
 BUILD=/build
 DEBS=/deb
 KEYFILE=/keyfile.key		# optional
+LOGDIR=$DEBS/logs
+rm -rf $LOGDIR
+mkdir -p $LOGDIR
+LOGFILE=$LOGDIR/1st.log		# Reset for each package; establish scope now.
+
+echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+date | tee -a $LOGFILE
 
 # "docker run ... -e cores=N" or suppressarm=false
 CORES=${cores:-}
@@ -278,7 +299,7 @@ SUPPRESSARM=${suppressarm:-true}	# true or false
 
 for E in CORES SUPPRESSARM; do
 	eval VAL=\$$E
-	echo "$E=$VAL"
+	log "$E=$VAL"
 done
 
 # Other setup tasks
@@ -287,11 +308,11 @@ git config --global user.email "example@example.com"	# for commit -s
 git config --global user.name "l4fame-build-container"
 
 if inContainer; then	 # Create the directories used in "docker run -v"
-    echo In container
+    log In container
     mkdir -p $BUILD		# Root of the container
     mkdir -p $DEBS		# Root of the container
 else
-    echo NOT in container
+    log NOT in container
     # apt-get install -y linux-image-arm64	Austin's first try?
 fi 
 
@@ -306,28 +327,24 @@ cd $BUILD
 set_gbp_config
 set_debuild_config
 
-get_update_path l4fame-node.git && gbp buildpackage
-
-get_update_path l4fame-manager.git && gbp buildpackage
-
-get_update_path tm-libfuse.git && gbp buildpackage
-
-get_update_path tm-librarian.git && gbp buildpackage
-
-get_update_path tm-hello-world.git && gbp buildpackage
+for REPO in tm-librarian tm-libfuse \
+    l4fame-node l4fame-manager tm-hello-world
+	do
+		get_update_path ${REPO}.git && build_via_gbp
+	done
 
 get_update_path libfam-atomic.git && \
-    gbp buildpackage --git-upstream-tree=branch
+    build_via_gbp --git-upstream-tree=branch
 
 get_update_path tm-manifesting.git && \
-    gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
+    build_via_gbp --git-upstream-branch=master --git-upstream-tree=branch
 
 get_update_path Emulation.git && \
-    gbp buildpackage --git-upstream-branch=master
+    build_via_gbp --git-upstream-branch=master
 
 fix_nvml_rules
 get_update_path nvml.git && \
-    gbp buildpackage --git-prebuild='mv -f /tmp/rules debian/rules'
+    build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
 
 # The kernel has its own deb build mechanism.
 get_update_path linux-l4fame.git
