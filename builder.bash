@@ -317,7 +317,8 @@ MASTERLOG=$LOGDIR/1st.log
 LOGFILE=$MASTERLOG		# Reset for each package; establish scope now.
 
 echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-date | tee -a $LOGFILE
+log "Started at `date`"
+ELAPSED=`date +%s`
 
 # "docker run ... -e cores=N" or suppressarm=false
 CORES=${cores:-}
@@ -383,7 +384,11 @@ cp $GBPOUT/*.deb $DEBS
 cp $GBPOUT/*.changes $DEBS
 
 LOGFILE=$MASTERLOG
-log "Finished at `date`"
+let ELAPSED=`date +%s`-ELAPSED
+log "Finished at `date` ($ELAPSED seconds)"
+
+# With set -u, un-altered arrays throw an XXXXX unbound error on reference.
+set +u
 
 log "\nWARNINGS:"
 for (( I=0; I < ${#WARNINGS[@]}; I++ )); do log "${WARNINGS[$I]}"; done
