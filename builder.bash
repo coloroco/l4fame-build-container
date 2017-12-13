@@ -14,7 +14,7 @@ set -u
 # Convenience routines.
 
 function log() {
-	echo "$*" | tee -a $LOGFILE
+	echo -e "$*" | tee -a $LOGFILE
 }
 
 function die() {
@@ -121,9 +121,9 @@ function get_build_prerequisites() {
 	    BRANCH=	# sentinel for exhausting the loop
         done
 	if [ "$BRANCH" ]; then
-	    MSG="NO BRANCH OF $GITPATH HAS A 'debian' DIRECTORY!!!"
+	    MSG="No 'debian' directory in any branch of $GITPATH."
 	    log $MSG
-	    WARNINGS+=("$MSG")	# for example,kernel doesn't care
+	    WARNINGS+=("$MSG")	# for example, kernel doesn't care
 	    return
 	fi
     fi
@@ -313,7 +313,8 @@ readonly LOGDIR=$DEBS/logs
 
 rm -rf $LOGDIR
 mkdir -p $LOGDIR
-LOGFILE=$LOGDIR/1st.log		# Reset for each package; establish scope now.
+MASTERLOG=$LOGDIR/1st.log
+LOGFILE=$MASTERLOG		# Reset for each package; establish scope now.
 
 echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 date | tee -a $LOGFILE
@@ -369,7 +370,7 @@ get_update_path Emulation.git && \
 
 fix_nvml_rules
 get_update_path nvml.git && \
-    build_via_gbp "--git-prebuild='mvvv -f /tmp/rules debian/rules'"
+    build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
 
 # The kernel has its own deb build mechanism.
 get_update_path linux-l4fame.git
@@ -381,13 +382,14 @@ build_kernel
 cp $GBPOUT/*.deb $DEBS
 cp $GBPOUT/*.changes $DEBS
 
-echo "Finished at `date`"
+LOGFILE=$MASTERLOG
+log "Finished at `date`"
 
-echo -e "\nWARNINGS:"
-for (( I=0; I < ${#WARNINGS[@]}; I++ )); do echo ${WARNINGS[$I]}; done
+log "\nWARNINGS:"
+for (( I=0; I < ${#WARNINGS[@]}; I++ )); do log "${WARNINGS[$I]}"; done
 
-echo -e "\nERRORS:"
-for (( I=0; I < ${#ERRORS[@]}; I++ )); do echo ${ERRORS[$I]}; done
+log "\nERRORS:"
+for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
 
 [ ${#ERRORS[@]} -ne 0 ] && die "Error(s) occurred"
 
