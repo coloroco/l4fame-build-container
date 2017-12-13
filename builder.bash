@@ -243,15 +243,15 @@ function build_kernel() {
     /bin/pwd
     git status
 
+    log "KERNEL BUILD @ `date`"
     if inContainer; then
-	log KERNEL BUILD IN CONTAINER
-        cp config.amd64-l4fame .config
         touch ../$(basename $(pwd))-update
+        cp config.amd64-l4fame .config
 
-	# November 2017: stretch has gcc 6.3.0 and it picks up an error in
-	# fam-atomic and I need this for Discover and FAME.  Greg will
-	# probably fix it in time, but until then:
-	sed -ie 's/CONFIG_FAM_ATOMIC=m/CONFIG_FAM_ATOMIC=n/' .config
+	# Suppress debug kernel - saves 45 seconds and and 500M of space
+	# https://superuser.com/questions/925079/compile-linux-kernel-deb-pkg-target-without-generating-dbg-package
+	scripts/config --disable DEBUG_INFO &>$LOGFILE
+
     else
         cp config.arm64-mft .config
         rm ../$(basename $(pwd))-update
@@ -267,6 +267,8 @@ function build_kernel() {
 
     # Sign the linux*.changes file if applicable
     [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" $GBPOUT/linux*.changes )
+
+    log "kernel finished at `date`"
 }
 
 ###########################################################################
@@ -377,7 +379,7 @@ fix_nvml_rules
 get_update_path nvml.git && \
     build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
 
-# The kernel has its own deb build mechanism.
+# The kernel has its own deb build mechanism so ignore retval on...
 get_update_path linux-l4fame.git
 build_kernel
 
