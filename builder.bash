@@ -110,24 +110,26 @@ function set_debuild_config () {
 function get_build_prerequisites() {
     log get_build_prerequisites $GITPATH
     cd "$GITPATH"
-    if [[ "$(git branch -r | grep -v HEAD | cut -d'/' -f2)" =~ "debian" ]]; then
+    RBRANCHES=`git branch -r | grep -v HEAD | cut -d'/' -f2`
+    if [[ "$RBRANCHES" =~ "debian" ]]; then
         git checkout debian -- &>/dev/null
         [ -d "debian" ] || die "'debian' branch has no 'debian' directory"
 	BRANCH=debian
     else
-        for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
+        for BRANCH in $RBRANCHES; do
+	    log "Looking for 'debian' dir in branch $BRANCH"
             git checkout $BRANCH -- &>/dev/null
             [ -d "debian" ] && break
 	    BRANCH=	# sentinel for exhausting the loop
         done
-	if [ "$BRANCH" ]; then
+	if [ ! "$BRANCH" ]; then
 	    MSG="No 'debian' directory in any branch of $GITPATH."
 	    log $MSG
 	    WARNINGS+=("$MSG")	# for example, kernel doesn't care
 	    return
 	fi
     fi
-    log get_build_prerequisites found "debian" directory in $BRANCH
+    log "get_build_prerequisites found 'debian' directory in branch $BRANCH"
     if [ -e debian/rules ]; then
     	dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
 	collect_errors
@@ -187,7 +189,7 @@ function get_update_path() {
     LOGFILE=$LOGDIR/$BN.log
     RUN_UPDATE=
     echo '-----------------------------------------------------------------'
-    log get_update_path $REPO
+    log "get_update_path $REPO at `date`"
 
     BNPREFIX=`basename "$BN" .git`	# strip .git off the end
     [ "$BN" == "$BNPREFIX" ] && \
@@ -223,11 +225,13 @@ function get_update_path() {
 # Depends on a correct $GITPATH, branch, and $LOGFILE being preselected.
 
 function build_via_gbp() {
+    log "gbp start at `date`"
     GBPARGS="$*"
     cd $GITPATH
     log "$GITPATH args: $GBPARGS"
     eval "gbp buildpackage $GBPARGS" 2>&1 | tee -a $LOGFILE
     collect_errors
+    log "gbp finished at `date`"
 }
 
 ###########################################################################
