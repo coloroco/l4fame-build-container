@@ -248,9 +248,9 @@ function build_kernel() {
         touch ../$(basename $(pwd))-update
         cp config.amd64-l4fame .config
 
-	# Suppress debug kernel - saves 45 seconds and and 500M of space
+	# Suppress debug kernel - saves a minute and 500M of space
 	# https://superuser.com/questions/925079/compile-linux-kernel-deb-pkg-target-without-generating-dbg-package
-	scripts/config --disable DEBUG_INFO &>$LOGFILE
+	scripts/config --disable DEBUG_INFO &>>$LOGFILE
 
     else
         cp config.arm64-mft .config
