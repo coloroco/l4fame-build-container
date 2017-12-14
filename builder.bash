@@ -313,7 +313,7 @@ GPGID=
 # the chroot.
 
 readonly BUILD=/build
-readonly DEBS=/deb
+readonly DEBS=/debs
 readonly KEYFILE=/keyfile.key		# optional
 readonly LOGDIR=$DEBS/logs
 
