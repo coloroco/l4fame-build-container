@@ -1,4 +1,4 @@
-FROM debian:stretch
+FROM debian:latest
 
 LABEL maintainer="Austin Hunting"
 LABEL maintainer_email="austin.hunting@hpe.com"
