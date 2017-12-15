@@ -53,7 +53,8 @@ function inContainer() {
 }
 
 ###########################################################################
-# Sets the configuration file for gbp
+# Sets the configuration file for gbp.  Note that "debian/rules" is an
+# executeable file under fakeroot, with a shebang line of "#!/usr/bin/make -f"
 
 GBPOUT=/gbp-build-area/
 
@@ -209,7 +210,9 @@ function get_update_path() {
             for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
 	        log Checking branch $BRANCH for updates
                 git checkout $BRANCH -- &>/dev/null
+		[ $? -ne 0 ] && log "git checkout $BRANCH failed" && return 1
                 ANS=$(git pull)
+		[ $? -ne 0 ] && log "git pull on $BRANCH failed" && return 1
                 [[ "$ANS" =~ "Updating" ]] && RUN_UPDATE=yes # && break
             done
 	fi
@@ -360,24 +363,48 @@ cd $BUILD
 set_gbp_config
 set_debuild_config
 
-for REPO in tm-librarian tm-libfuse \
-    l4fame-node l4fame-manager tm-hello-world
-	do
-		get_update_path ${REPO}.git && build_via_gbp
-	done
+# Using image debian:latest (vs :stretch) seems to have brought along
+# a more pedantic gbp that is less forgiving of branch names.
+# gbp will take branches like this:
+# 1. Only "master" if it has a "debian" directory
+# 2. "master" without a "debian" directory if there's a branch named "debian"
+#    with a "debian" directory
+# 3. "master", "debian", and "upstream" and I don't know what it does
+# For all other permutations start slinging options.
 
-get_update_path libfam-atomic.git && \
-    build_via_gbp --git-upstream-tree=branch
+# Package		Branches		"debian" dir	src in
+# Emulation		debian,master		debian		master
+# l4fame-manager	master			master		n/a
+# l4fame-node		master			master		n/a
+# tm-hello-world	debian,master		debian		debian,master
+# tm-libfuse		debian,hp_l4tm,upstream	debian		debian,upstream
+# tm-librarian		debian,master,upstream	debian,master	All three
+# tm-manifesting	master,zach_dev		master		master
 
-get_update_path tm-manifesting.git && \
-    build_via_gbp --git-upstream-branch=master --git-upstream-tree=branch
+# This is what works, trial and error, I stopped at first working solution.
+# They might not be optimal or use minimal set of --git-upstream-xxx options.
 
-get_update_path Emulation.git && \
-    build_via_gbp --git-upstream-branch=master
+for REPO in l4fame-node l4fame-manager tm-hello-world tm-libfuse; do
+    get_update_path ${REPO}.git && build_via_gbp
+done
 
 fix_nvml_rules
 get_update_path nvml.git && \
     build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
+
+for REPO in libfam-atomic tm-librarian; do 
+    get_update_path ${REPO}.git && \
+    build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master
+done
+
+get_update_path Emulation.git && build_via_gbp --git-upstream-branch=master
+
+# Manifesting has a bad date in debian/changelog that chokes a Perl module.
+# They got more strict in "debian:lastest".  I hate Debian.  For now...
+# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=795616
+get_update_path tm-manifesting.git
+sed -ie 's/July/Jul/' debian/changelog
+build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master
 
 # The kernel has its own deb build mechanism so ignore retval on...
 get_update_path linux-l4fame.git
