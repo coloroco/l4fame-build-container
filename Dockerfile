@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get -y install git
 
-COPY builder.bash builder.bash
+# WORKDIR is /
+COPY builder.bash /builder.bash
 
-CMD ./builder.bash
+CMD /builder.bash
