@@ -6,15 +6,22 @@
 # "docker run" command.  Log files for each package build can also be
 # found there.  ARM packages may be built depending on SUPPRESSARM.
 
-SUPPRESSARM=${suppressarm:-true}	# true or false
+SUPPRESSARM=${suppressarm:-false}	# true or false
 
 set -u
 
 ###########################################################################
 # Convenience routines.
 
+LOGFILE=
+
+function newlog() {
+	LOGFILE="$1"
+	mkdir -p `dirname "$LOGFILE"`
+}
+
 function log() {
-	echo -e "$*" | tee -a $LOGFILE
+	echo -e "$*" | tee -a "$LOGFILE"
 }
 
 function die() {
@@ -187,7 +194,7 @@ GITPATH="Main program"	# Set scope
 function get_update_path() {
     REPO=$1
     BN=`basename "$REPO"`
-    LOGFILE=$LOGDIR/$BN.log
+    newlog $LOGDIR/$BN.log
     RUN_UPDATE=
     echo '-----------------------------------------------------------------'
     log "get_update_path $REPO at `date`"
@@ -288,8 +295,8 @@ function maybe_build_arm() {
     [ ! -d $CHROOT ] && qemu-debootstrap \
     	--arch=arm64 $RELEASE $CHROOT http://deb.debian.org/debian/
 
-    mkdir $CHROOT$BUILD		# Root of the chroot
-    mkdir $CHROOT$DEBS		# Root of the chroot
+    mkdir -p $CHROOT$BUILD		# Root of the chroot
+    mkdir -p $CHROOT$DEBS		# Root of the chroot
 
     # Bind mounts allow access from inside the chroot
     mount --bind $BUILD $CHROOT$BUILD		# ie, the git checkout area
@@ -298,6 +305,7 @@ function maybe_build_arm() {
 
     [ -f $KEYFILE ] && cp $KEYFILE $CHROOT
 
+    log Next, cp "$0" $CHROOT
     cp "$0" $CHROOT
     chroot $CHROOT "/$(basename $0)" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
     return $?
@@ -323,7 +331,7 @@ readonly LOGDIR=$DEBS/logs
 rm -rf $LOGDIR
 mkdir -p $LOGDIR
 MASTERLOG=$LOGDIR/1st.log
-LOGFILE=$MASTERLOG		# Reset for each package; establish scope now.
+newlog $MASTERLOG		# Reset for each package; establish scope now.
 
 echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 log "Started at `date`"
@@ -416,7 +424,7 @@ build_kernel
 cp $GBPOUT/*.deb $DEBS
 cp $GBPOUT/*.changes $DEBS
 
-LOGFILE=$MASTERLOG
+newlog $MASTERLOG
 let ELAPSED=`date +%s`-ELAPSED
 log "Finished at `date` ($ELAPSED seconds)"
 
@@ -430,6 +438,8 @@ log "\nERRORS:"
 for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
 
 [ ${#ERRORS[@]} -ne 0 ] && die "Error(s) occurred"
+
+set -u
 
 # But wait there's more!
 inContainer && maybe_build_arm
