@@ -255,17 +255,21 @@ function build_kernel() {
 
     log "KERNEL BUILD @ `date`"
     if inContainer; then
-        touch ../$(basename $(pwd))-update
         cp config.amd64-l4fame .config
-
-	# Suppress debug kernel - saves a minute and 500M of space
-	# https://superuser.com/questions/925079/compile-linux-kernel-deb-pkg-target-without-generating-dbg-package
-	scripts/config --disable DEBUG_INFO &>>$LOGFILE
-
+        touch ../$(basename $(pwd))-update
     else
         cp config.arm64-mft .config
         rm ../$(basename $(pwd))-update
     fi
+
+    # Suppress debug kernel - saves a minute and 500M of space
+    # https://superuser.com/questions/925079/compile-linux-kernel-deb-pkg-target-without-generating-dbg-package
+    scripts/config --disable DEBUG_INFO &>>$LOGFILE
+
+    # See scripts/link-vmlinux.  Reset the final numeric suffix counter,
+    # the "NN" in linux-image-4.14.0-l4fame+_4.14.0-l4fame+-NN_amd64.deb.
+    rm -f .version	# restarts at 1
+
     git add . 
     git commit -a -s -m "Removing -dirty"
     log "Now at `/bin/pwd` ready to make"
