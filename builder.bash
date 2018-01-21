@@ -7,8 +7,8 @@
 # found there.  Packages are always downloaded but may not be built
 # per these variables.  "false" and "true" are the executables.
 
-SUPPRESSAMD=true			# Mostly for debugging
-SUPPRESSARM=${suppressarm:-true}
+SUPPRESSAMD=false			# Mostly for debugging
+SUPPRESSARM=${suppressarm:-false}	# FIXME: in chroot
 
 set -u
 
@@ -468,7 +468,9 @@ for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
 
 set -u
 
-# But wait there's more!
+# But wait there's more!  Let all AMD stuff run from here on out.
+# The next routine should get into a chroot very quickly.
+SUPPRESSAMD=false
 maybe_build_arm
 
 exit 0
