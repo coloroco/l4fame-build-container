@@ -4,9 +4,11 @@
 # pulled from Github and Debian x86_64 packages created from them.  The
 # resulting .deb files are deposited in the "debs" volume from the
 # "docker run" command.  Log files for each package build can also be
-# found there.  ARM packages may be built depending on SUPPRESSARM.
+# found there.  Packages are always downloaded but may not be built
+# per these variables.  "false" and "true" are the executables.
 
-SUPPRESSARM=${suppressarm:-false}	# true or false
+SUPPRESSAMD=true			# Mostly for debugging
+SUPPRESSARM=${suppressarm:-true}
 
 set -u
 
@@ -57,6 +59,19 @@ function inContainer() {
 	[ ! -d /proc ] && return 1	# again, dodgy
 	[ `ls /proc | wc -l` -gt 0 ]
 	return $?
+}
+
+function suppressed() {
+	if inContainer; then
+		REASON=AMD
+		$SUPPRESSAMD
+	else
+		REASON=ARM
+		$SUPPRESSARM
+	fi
+	RET=$?
+	[ $RET -eq 0 ] && log "$* ($REASON) is suppressed"
+	return $RET
 }
 
 ###########################################################################
@@ -235,6 +250,7 @@ function get_update_path() {
 # Depends on a correct $GITPATH, branch, and $LOGFILE being preselected.
 
 function build_via_gbp() {
+    suppressed "GPB" && return 0
     log "gbp start at `date`"
     GBPARGS="$*"
     cd $GITPATH
@@ -248,6 +264,7 @@ function build_via_gbp() {
 # Assumes LOGFILE is set
 
 function build_kernel() {
+    suppressed "Kernel build" && return 0
     cd $GITPATH
     git checkout mdc/linux-4.14.y || exit 99
     /bin/pwd
@@ -289,13 +306,15 @@ function build_kernel() {
 # Possibly create an arm chroot, fix it up, and run this script inside  it.
 
 function maybe_build_arm() {
-    $SUPPRESSARM && return 1
+    ! inContainer && return 1	# infinite recursion
+    suppressed "ARM building" && return 0
 
     # build an arm64 chroot if none exists.  The sentinel is the existence of
     # the directory autocreated by the qemu-debootstrap command, ie, don't
     # manually create the directory first.
 
-    apt-get install -y debootstrap qemu-user-static
+    log apt-get install debootstrap qemu-user-static
+    apt-get install -y debootstrap qemu-user-static &>> $LOGFILE
     [ ! -d $CHROOT ] && qemu-debootstrap \
     	--arch=arm64 $RELEASE $CHROOT http://deb.debian.org/debian/
 
@@ -309,9 +328,11 @@ function maybe_build_arm() {
 
     [ -f $KEYFILE ] && cp $KEYFILE $CHROOT
 
-    log Next, cp "$0" $CHROOT
-    cp "$0" $CHROOT
-    chroot $CHROOT "/$(basename $0)" 'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
+    BUILDER="/$(basename $0)"	# Here in the container
+    log Next, cp $BUILDER $CHROOT
+    cp $BUILDER $CHROOT
+    chroot $CHROOT $BUILDER \
+    	'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
     return $?
 }
 
@@ -329,13 +350,13 @@ GPGID=
 
 readonly BUILD=/build
 readonly DEBS=/debs
-readonly KEYFILE=/keyfile.key		# optional
+readonly KEYFILE=/keyfile.key	# optional
 readonly LOGDIR=$DEBS/logs
+readonly MASTERLOG=$LOGDIR/1st.log
 
 rm -rf $LOGDIR
 mkdir -p $LOGDIR
-MASTERLOG=$LOGDIR/1st.log
-newlog $MASTERLOG		# Reset for each package; establish scope now.
+newlog $MASTERLOG		# Generic; re-set for each package
 
 echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 log "Started at `date`"
@@ -345,7 +366,7 @@ ELAPSED=`date +%s`
 CORES=${cores:-}
 [ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
 
-for E in CORES SUPPRESSARM; do
+for E in CORES SUPPRESSAMD SUPPRESSARM; do
 	eval VAL=\$$E
 	log "$E=$VAL"
 done
@@ -384,14 +405,16 @@ set_debuild_config
 # 3. "master", "debian", and "upstream" and I don't know what it does
 # For all other permutations start slinging options.
 
-# Package		Branches		"debian" dir	src in
+# Package		Branches of concern	"debian" dir	src in
 # Emulation		debian,master		debian		master
 # l4fame-manager	master			master		n/a
 # l4fame-node		master			master		n/a
+# libfam-atomic		debian,master,upstream	debian,master	All three		
+# nvml			debian,master,upstream	debian		All three
 # tm-hello-world	debian,master		debian		debian,master
-# tm-libfuse		debian,hp_l4tm,upstream	debian		debian,upstream
+# tm-libfuse		debian,upstream		debian		debian,upstream
 # tm-librarian		debian,master,upstream	debian,master	All three
-# tm-manifesting	master,zach_dev		master		master
+# tm-manifesting	master			master		master
 
 # This is what works, trial and error, I stopped at first working solution.
 # They might not be optimal or use minimal set of --git-upstream-xxx options.
@@ -446,6 +469,6 @@ for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
 set -u
 
 # But wait there's more!
-inContainer && maybe_build_arm
+maybe_build_arm
 
 exit 0
