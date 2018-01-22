@@ -7,8 +7,8 @@
 # found there.  Packages are always downloaded but may not be built
 # per these variables.  "false" and "true" are the executables.
 
-SUPPRESSAMD=false			# Mostly for debugging
-SUPPRESSARM=${suppressarm:-false}	# FIXME: in chroot
+SUPPRESSAMD=false			# Mostly for debugging, 45 minutes
+SUPPRESSARM=${suppressarm:-false}	# FIXME: in chroot; 2 hours
 
 set -u
 
@@ -360,6 +360,9 @@ newlog $MASTERLOG		# Generic; re-set for each package
 
 echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 log "Started at `date`"
+log "$*"
+log "`env | sort`"
+
 ELAPSED=`date +%s`
 
 # "docker run ... -e cores=N" or suppressarm=false
