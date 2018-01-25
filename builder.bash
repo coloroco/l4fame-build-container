@@ -276,10 +276,12 @@ function build_kernel() {
         touch ../$(basename $(pwd))-update
     else
         cp config.arm64-mft .config
+    	# Already set in amd, need it for arm January 2018
+    	scripts/config --set-str LOCALVERSION "-l4fame"
         rm ../$(basename $(pwd))-update
     fi
 
-    # Suppress debug kernel - saves a minute and 500M of space
+    # Suppress debug kernel - save a few minutes and 500M of space
     # https://superuser.com/questions/925079/compile-linux-kernel-deb-pkg-target-without-generating-dbg-package
     scripts/config --disable DEBUG_INFO &>>$LOGFILE
 
