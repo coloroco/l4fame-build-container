@@ -6,6 +6,7 @@
 # TODO: Note, added "..." to every log() call
 # TODO: Note, kernel builds take forever because dpkg-deb doesn't multi-thread
 # TODO: Note, do we want to build the source packages as well?
+# TODO: Note, going to have to switch to git fetch to check for updates.
 
 # This gets copied into a container image and run.  Multiple repos are
 # pulled from GitHub and Debian x86_64 packages created from them.  The
@@ -356,6 +357,7 @@ function maybe_build_arm() {
     log "Next, cp $BUILDER $CHROOT"
     # TODO: This assumes you're in the same dir as the builder script
     # TODO: using "$0" gets the script even if currently executing in build dir
+    # TODO: Makes sense considering the provided Dockerfile
     cp $BUILDER $CHROOT
     chroot $CHROOT $BUILDER \
         'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
