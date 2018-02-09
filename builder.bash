@@ -61,10 +61,13 @@ function collect_errors() {
 # environment.  The container always has it, the chroot, maybe not.
 # This breaks down for exec -it bash.   Okay, go back.
 
+# TODO: Should we just create an indicator file using the Dockerfile and check for that?
 function inContainer() {
     TMP=$(grep 2>&1)
     [[ "$TMP" =~ '.*not found$' ]] && return 1 # no grep == not container
     [ ! -d /proc ] && return 1  # again, dodgy
+    # TODO: only works if we have this run command in the Dockerfile
+    # [ ! -f /.in_docker_container ] && return 1
     [ $(ls /proc | wc -l) -gt 0 ]
     return $?
 }
