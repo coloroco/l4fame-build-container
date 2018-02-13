@@ -7,6 +7,7 @@
 # TODO: Note, kernel builds take forever because dpkg-deb doesn't multi-thread
 # TODO: Note, do we want to build the source packages as well?
 # TODO: Note, going to have to switch to git fetch to check for updates.
+# TODO: Note, changed what flags most of the repos are using
 
 # This gets copied into a container image and run.  Multiple repos are
 # pulled from GitHub and Debian x86_64 packages created from them.  The
@@ -37,7 +38,18 @@ function log() {
 function die() {
     log "$*"
     echo "$*" >&2
-    exit 1
+    #exit 1
+
+    # TODO: As opposed to exiting, a message is displayed to facilitate debugging
+    echo "--------------------"
+    echo "Would have died here"
+    echo "Continue? y/[n]     "
+    echo "--------------------"
+    read -t 15 answer;
+    answer=${answer:-n}
+    if echo "$answer" | grep -iq "^n" ;then
+        exit 1
+    fi
 }
 
 ###########################################################################
@@ -61,17 +73,14 @@ function collect_errors() {
 # environment.  The container always has it, the chroot, maybe not.
 # This breaks down for exec -it bash.   Okay, go back.
 
-# TODO: Should we just create an indicator file using the Dockerfile and check for that?
+# TODO: We just create an indicator file using RUN in the Dockerfile
 function inContainer() {
-    TMP=$(grep 2>&1)
-    [[ "$TMP" =~ '.*not found$' ]] && return 1 # no grep == not container
-    [ ! -d /proc ] && return 1  # again, dodgy
-    # TODO: only works if we have this run command in the Dockerfile
-    # [ ! -f /.in_docker_container ] && return 1
-    [ $(ls /proc | wc -l) -gt 0 ]
+    [ -f /.in_docker_container ] # only works if using Dockerfile image
     return $?
 }
 
+# TODO: How does this function work in relation to the "SUPPRESSAMD" and "SUPPRESSARM" \
+#       values as set in the very beginning and at the very end?
 function suppressed() {
     if inContainer; then
         REASON=AMD
@@ -107,10 +116,10 @@ EOF
     # Insert a postbuild command into the middle of the gbp configuration file
     # This indicates to the arm64 chroot which repositories need to be built
     if inContainer; then    # mark repositories to be built
-        echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
+        echo "postbuild=rm ../\$(basename \$(pwd))-AMD-update" >> $HOME/.gbp.conf
     else
         # In chroot, mark repositories as already built
-        echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
+        echo "postbuild=rm ../\$(basename \$(pwd))-ARM-update" >> $HOME/.gbp.conf
     fi
     cat <<EOF >> $HOME/.gbp.conf
 [git-import-orig]
@@ -133,10 +142,10 @@ function set_debuild_config () {
         gpg --import $KEYFILE
         GPGID=$(gpg -K | grep uid | cut -d] -f2)
         # TODO: Remove the "-b" flag
-        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -b -i -j$CORES\"" > $HOME/.devscripts
+        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -i -j$CORES\"" > $HOME/.devscripts
     else
         # TODO: Remove the "-b" flag
-        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -b -i -j$CORES\"" > $HOME/.devscripts
+        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -i -j$CORES\"" > $HOME/.devscripts
     fi
 }
 
@@ -153,6 +162,7 @@ function get_build_prerequisites() {
     RBRANCHES=$(git branch -r | grep -v HEAD | cut -d'/' -f2)
     if [[ "$RBRANCHES" =~ "debian" ]]; then
         git checkout debian -- &>/dev/null
+        # TODO: Shouldn't we move to the next repo as opposed to dying?
         [ -d "debian" ] || die "'debian' branch has no 'debian' directory"
         BRANCH=debian
     else
@@ -243,12 +253,15 @@ function get_update_path() {
 
     # Only do git work in the container.  Bind links will expose it to chroot.
     if inContainer; then
+        [ -f $(basename "$GITPATH-AMD-update") ] && RUN_UPDATE=yes
         # TODO: Should we move to "git fetch" as opposed to "git branch" here?
         if [ ! -d "$GITPATH"  ]; then   # First time
             cd $BUILD
             log "Cloning $REPO"
+            # TODO: Shouldn't we move to the next repo as opposed to dying?
             git clone "$REPO" || die "git clone $REPO failed"
             [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
+            RUN_UPDATE=yes
         else            # Update any branches that need it.
             cd $GITPATH
             for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
@@ -260,9 +273,10 @@ function get_update_path() {
                 [[ "$ANS" =~ "Updating" ]] && RUN_UPDATE=yes # && break
             done
         fi
+        [[ "$RUN_UPDATE" == "yes" ]] && touch /$BUILD/"$BNPREFIX-AMD-update" /$BUILD/"$BNPREFIX-ARM-update"
     else
         # In chroot: check if container path above left a sentinel.
-        [ -f $(basename "$GITPATH-update") ] && RUN_UPDATE=yes
+        [ -f $(basename "$BNPREFIX-ARM-update") ] && RUN_UPDATE=yes
     fi
     get_build_prerequisites
     return $?
@@ -333,6 +347,7 @@ function build_kernel() {
 ###########################################################################
 # Possibly create an arm chroot, fix it up, and run this script inside  it.
 
+# TODO: Why is this a maybe and what is required for execution?
 function maybe_build_arm() {
     ! inContainer && return 1   # infinite recursion
     suppressed "ARM building" && return 0
@@ -368,9 +383,18 @@ function maybe_build_arm() {
 }
 
 ###########################################################################
+# Remove build information, then copy everything to the external deb folder
+copy_built_packages () {
+    rm -f $GBPOUT/*.build*;
+    cp $GBPOUT/* $DEBS
+}
+
+###########################################################################
 # MAIN
 # Set globals and accommodate docker runtime arguments.
 
+# TODO: Has release = stretch here but the container is pulling from latest
+# TODO: This has different effects under Ubuntu and Debain
 readonly ARMDIR=/arm
 readonly RELEASE=stretch
 readonly CHROOT=$ARMDIR/$RELEASE
@@ -397,6 +421,8 @@ log "$(env | sort)"
 ELAPSED=$(date +%s)
 
 # "docker run ... -e cores=N" or suppressarm=false
+# TODO: Values set with "-e item=value" can only be set on the first run
+# TODO: There is no good way to change them without making a new container
 CORES=${cores:-}
 [ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
 
@@ -423,7 +449,7 @@ fi
 # TODO: Will move to Dockerfile and push a rebuild
 # TODO: See "Note" section from the following documentation
 # TODO: https://docs.docker.com/engine/reference/builder/#env
-#export DEBIAN_FRONTEND=noninteractive   # Should be in Dockerfile
+export DEBIAN_FRONTEND=noninteractive   # Should be in Dockerfile
 
 apt-get update && apt-get upgrade -y
 apt-get install -y git-buildpackage
@@ -460,39 +486,41 @@ set_debuild_config
 # This is what works, trial and error, I stopped at first working solution.
 # They might not be optimal or use minimal set of --git-upstream-xxx options.
 
-for REPO in l4fame-node l4fame-manager tm-hello-world tm-libfuse; do
+for REPO in l4fame-node l4fame-manager tm-libfuse tm-librarian; do
     get_update_path ${REPO}.git && build_via_gbp
 done
 
 fix_nvml_rules
 get_update_path nvml.git && \
-    build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
+    build_via_gbp "--git-postexport='mv -f /tmp/rules debian/rules' --git-upstream-tree=branch --git-upstream-branch=debian"
 
-for REPO in libfam-atomic tm-librarian; do
-    get_update_path ${REPO}.git && \
-    build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master
-done
+get_update_path libfam-atomic.git && build_via_gbp --git-upstream-tree=branch
 
+get_update_path tm-hello-world.git && build_via_gbp --git-upstream-tree=branch --git-upstream-branch=debian
 get_update_path Emulation.git && build_via_gbp --git-upstream-branch=master
 
 # TODO: The Dockerfile uses debian:stretch, is this next block still relevant?
 # Manifesting has a bad date in debian/changelog that chokes a Perl module.
 # They got more strict in "debian:lastest".  I hate Debian.  For now...
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=795616
-get_update_path tm-manifesting.git
-sed -ie 's/July/Jul/' debian/changelog
-build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master
+get_update_path tm-manifesting.git && \
+    build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master --git-cleaner=/bin/true
+
+# TODO: Do we still need the call to "sed" if the git cleaner is "/bin/true/"?
+#sed -ie 's/July/Jul/' debian/changelog
 
 # The kernel has its own deb build mechanism so ignore retval on...
-get_update_path linux-l4fame.git
-build_kernel
+# TOD: Not trying to build this for now
+#get_update_path linux-l4fame.git
+#build_kernel
 
 #--------------------------------------------------------------------------
 # That's all, folks!  Move what worked.
 
 # TODO: Do we want to build the source packages as well?
-cp $GBPOUT/*.deb $DEBS
-cp $GBPOUT/*.changes $DEBS
+copy_built_packages
+#cp $GBPOUT/*.deb $DEBS
+#cp $GBPOUT/*.changes $DEBS
 
 newlog $MASTERLOG
 let ELAPSED=$(date +%s)-ELAPSED
@@ -507,6 +535,8 @@ for (( I=0; I < ${#WARNINGS[@]}; I++ )); do log "${WARNINGS[$I]}"; done
 log "\nERRORS:"
 for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
 
+# TODO: If there are any errors in the x86 build we just skip the arm build?
+# TODO: Seems like overkill, ask why
 [ ${#ERRORS[@]} -ne 0 ] && die "Error(s) occurred"
 
 set -u
@@ -515,6 +545,7 @@ set -u
 # The next routine should get into a chroot very quickly.
 SUPPRESSAMD=false
 # TODO: Will the script copy break because we are in $BUILD not where $0 is located?
+# TODO: Does this only trigger on the second launch of the container?
 maybe_build_arm
 
 exit 0
