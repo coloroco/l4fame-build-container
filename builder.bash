@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-# TODO: Note, all back-ticks have been swapped for $(...)
-# TODO: Note, indents on various loops and functions have been updated
-# TODO: Note, all tabs have been swapped to 4 spaces
-# TODO: Note, added "..." to every log() call
-# TODO: Note, kernel builds take forever because dpkg-deb doesn't multi-thread
-# TODO: Note, do we want to build the source packages as well?
-# TODO: Note, going to have to switch to git fetch to check for updates.
-# TODO: Note, changed what flags most of the repos are using
+# NOTE: all back-ticks have been swapped for $(...)
+# NOTE: indents on various loops and functions have been updated
+# NOTE: all tabs have been swapped to 4 spaces
+# NOTE: added "..." to every log() call
+# NOTE: kernel builds take forever because dpkg-deb doesn't multi-thread
+# NOTE: do we want to build the source packages as well?
+# NOTE: going to have to switch to git fetch to check for updates.
+# NOTE: changed what flags most of the repos are using
 
 # This gets copied into a container image and run.  Multiple repos are
 # pulled from GitHub and Debian x86_64 packages created from them.  The
@@ -38,18 +38,7 @@ function log() {
 function die() {
     log "$*"
     echo "$*" >&2
-    #exit 1
-
-    # TODO: As opposed to exiting, a message is displayed to facilitate debugging
-    echo "--------------------"
-    echo "Would have died here"
-    echo "Continue? y/[n]     "
-    echo "--------------------"
-    read -t 15 answer;
-    answer=${answer:-n}
-    if echo "$answer" | grep -iq "^n" ;then
-        exit 1
-    fi
+    exit 1
 }
 
 ###########################################################################
@@ -75,7 +64,7 @@ function collect_errors() {
 
 # TODO: We just create an indicator file using RUN in the Dockerfile
 function inContainer() {
-    [ -f /.in_docker_container ] # only works if using Dockerfile image
+    [ -f /.in_docker_container ] # NOTE only works if using Dockerfile image
     return $?
 }
 
@@ -97,7 +86,7 @@ function suppressed() {
 ###########################################################################
 # Sets the configuration file for gbp.  Note that "debian/rules" is an
 # executable file under fakeroot, with a shebang line of "#!/usr/bin/make -f"
-# TODO: added "force-create = True" for building source packages as well
+# NOTE: added "force-create = True" for building source packages as well
 
 GBPOUT=/gbp-build-area/
 
@@ -129,7 +118,7 @@ EOF
 
 ###########################################################################
 # Should only be run in the container?
-# TODO: Needs to be run the chroot as well to configure arm debuild
+# NOTE: Needs to be run the chroot as well to configure arm debuild
 # Sets the configuration file for debuild.
 # Also checks for a signing key to build packages with
 
@@ -137,14 +126,14 @@ function set_debuild_config () {
     # Check for signing key
     if [ -f $KEYFILE ]; then
         # Remove old keys, import new one, get the key uid
-        # TODO: added "-f" to rm to suppress errors, needed?
+        # NOTE: added "-f" to rm to suppress errors, needed?
         rm -rf $HOME/.gnupg
         gpg --import $KEYFILE
         GPGID=$(gpg -K | grep uid | cut -d] -f2)
-        # TODO: Remove the "-b" flag
+        # NOTE: Remove the "-b" flag
         echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -i -j$CORES\"" > $HOME/.devscripts
     else
-        # TODO: Remove the "-b" flag
+        # NOTE: Remove the "-b" flag
         echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -i -j$CORES\"" > $HOME/.devscripts
     fi
 }
@@ -174,8 +163,6 @@ function get_build_prerequisites() {
             BRANCH= # sentinel for exhausting the loop
         done
     fi
-    # TODO: moved one "fi" from below this to here
-    # TODO: does this break anything?
     if [ ! "$BRANCH" ]; then
         MSG="No 'debian' directory in any branch of $GITPATH."
         log "$MSG"
@@ -261,17 +248,27 @@ function get_update_path() {
             # TODO: Shouldn't we move to the next repo as opposed to dying?
             git clone "$REPO" || die "git clone $REPO failed"
             [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
+            TODO: Checkout all the branches at least once to prevent errors
+            cd $GITPATH
+            for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
+                git checkout $BRANCH -- &>/dev/null
+            done
+            # NOTE: Checkout original HEAD branch
+            git checkout $(git branch -r | grep HEAD | cut -d'/' -f3) -- &>/dev/null
             RUN_UPDATE=yes
         else            # Update any branches that need it.
             cd $GITPATH
-            for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
-                log "Checking branch $BRANCH for updates"
-                git checkout $BRANCH -- &>/dev/null
-                [ $? -ne 0 ] && log "git checkout $BRANCH failed" && return 1
-                ANS=$(git pull)
-                [ $? -ne 0 ] && log "git pull on $BRANCH failed" && return 1
-                [[ "$ANS" =~ "Updating" ]] && RUN_UPDATE=yes # && break
-            done
+            FETCH=$(git fetch -a 2>&1 | tail -n +2)
+            if [ "$FETCH" ]; then
+                RUN_UPDATE=yes
+                for BRANCH in $(echo "$FETCH" | cut -d'>' -f2 | cut -d'/' -f2-); do
+                    log "Checking branch $BRANCH for updates"
+                    git checkout $BRANCH -- &>/dev/null
+                    [ $? -ne 0 ] && log "git checkout $BRANCH failed" && return 1
+                    git merge &>/dev/null
+                    [ $? -ne 0 ] && log "git merge on $BRANCH failed" && return 1
+                done
+            fi
         fi
         [[ "$RUN_UPDATE" == "yes" ]] && touch /$BUILD/"$BNPREFIX-AMD-update" /$BUILD/"$BNPREFIX-ARM-update"
     else
@@ -310,14 +307,10 @@ function build_kernel() {
     log "KERNEL BUILD @ $(date)"
     if inContainer; then
         cp config.amd64-l4fame .config
-        touch ../$(basename $(pwd))-update
     else
         cp config.arm64-mft .config
         # Already set in amd, need it for arm January 2018
         scripts/config --set-str LOCALVERSION "-l4fame"
-        # TODO: Move this to after the kernel is built for arm
-        # TODO: Removing here fails to indicate successful build
-        rm ../$(basename $(pwd))-update
     fi
 
     # Suppress debug kernel - save a few minutes and 500M of space
@@ -334,8 +327,15 @@ function build_kernel() {
     make -j$CORES deb-pkg 2>&1 | tee -a $LOGFILE
     collect_errors
 
+    # Remove the build flag after the kernel has been made
+    if inContainer; then
+        rm ../$(basename $(pwd))-AMD-update
+    else
+        rm ../$(basename $(pwd))-ARM-update
+    fi
+
     # They end up one above $GITPATH???
-    # TODO: Ans, yep one above $GITPATH super annoying
+    # NOTE: Ans, yep one above $GITPATH super annoying
     mv -f $BUILD/linux*.* $GBPOUT   # Keep them with all the others
 
     # Sign the linux*.changes file if applicable
@@ -393,8 +393,8 @@ copy_built_packages () {
 # MAIN
 # Set globals and accommodate docker runtime arguments.
 
-# TODO: Has release = stretch here but the container is pulling from latest
-# TODO: This has different effects under Ubuntu and Debain
+# NOTE: Has release = stretch here, but the container is pulling from latest
+# NOTE: This has different effects under Ubuntu and Debain
 readonly ARMDIR=/arm
 readonly RELEASE=stretch
 readonly CHROOT=$ARMDIR/$RELEASE
@@ -421,8 +421,8 @@ log "$(env | sort)"
 ELAPSED=$(date +%s)
 
 # "docker run ... -e cores=N" or suppressarm=false
-# TODO: Values set with "-e item=value" can only be set on the first run
-# TODO: There is no good way to change them without making a new container
+# NOTE: Values set with "-e item=value" can only be set on the first run
+# NOTE: There is no good way to change them without making a new container
 CORES=${cores:-}
 [ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
 
@@ -433,9 +433,6 @@ done
 
 # Other setup tasks
 
-git config --global user.email "example@example.com"    # for commit -s
-git config --global user.name "l4fame-build-container"
-
 if inContainer; then     # Create the directories used in "docker run -v"
     log "In container"
     mkdir -p $BUILD     # Root of the container
@@ -443,7 +440,7 @@ if inContainer; then     # Create the directories used in "docker run -v"
 else
     log "NOT in container"
     # apt-get install -y linux-image-arm64  Austin's first try?
-    # TODO: Not sure what "linux-image-arm64" gets us. Pulled from Keith's build script
+    # NOTE: Not sure what "linux-image-arm64" gets us. Pulled from Keith's build script
 fi
 
 # TODO: Will move to Dockerfile and push a rebuild
@@ -454,6 +451,10 @@ export DEBIAN_FRONTEND=noninteractive   # Should be in Dockerfile
 apt-get update && apt-get upgrade -y
 apt-get install -y git-buildpackage
 apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
+
+# NOTE: These need to be set after git-buildpackage is installed as the chroot wont have git
+git config --global user.email "example@example.com"    # for commit -s
+git config --global user.name "l4fame-build-container"
 
 # Change into build directory, set the configuration files, then BUILD!
 cd $BUILD
@@ -510,7 +511,7 @@ get_update_path tm-manifesting.git && \
 #sed -ie 's/July/Jul/' debian/changelog
 
 # The kernel has its own deb build mechanism so ignore retval on...
-# TOD: Not trying to build this for now
+# TODO: Not trying to build this for now
 #get_update_path linux-l4fame.git
 #build_kernel
 
