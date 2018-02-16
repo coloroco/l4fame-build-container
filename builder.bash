@@ -248,7 +248,7 @@ function get_update_path() {
             # TODO: Shouldn't we move to the next repo as opposed to dying?
             git clone "$REPO" || die "git clone $REPO failed"
             [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
-            TODO: Checkout all the branches at least once to prevent errors
+            # TODO: Checkout all the branches at least once to prevent errors
             cd $GITPATH
             for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
                 git checkout $BRANCH -- &>/dev/null
