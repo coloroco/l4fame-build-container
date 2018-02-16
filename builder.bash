@@ -106,6 +106,7 @@ EOF
     # This indicates to the arm64 chroot which repositories need to be built
     if inContainer; then    # mark repositories to be built
         #echo "postbuild=rm ../\$(basename \$(pwd))-AMD-update" >> $HOME/.gbp.conf
+        echo "not needed"
     else
         # In chroot, mark repositories as already built
         echo "postbuild=rm ../\$(basename \$(pwd))-ARM-update" >> $HOME/.gbp.conf
