@@ -105,7 +105,7 @@ EOF
     # Insert a postbuild command into the middle of the gbp configuration file
     # This indicates to the arm64 chroot which repositories need to be built
     if inContainer; then    # mark repositories to be built
-        echo "postbuild=rm ../\$(basename \$(pwd))-AMD-update" >> $HOME/.gbp.conf
+        #echo "postbuild=rm ../\$(basename \$(pwd))-AMD-update" >> $HOME/.gbp.conf
     else
         # In chroot, mark repositories as already built
         echo "postbuild=rm ../\$(basename \$(pwd))-ARM-update" >> $HOME/.gbp.conf
@@ -240,7 +240,7 @@ function get_update_path() {
 
     # Only do git work in the container.  Bind links will expose it to chroot.
     if inContainer; then
-        [ -f $(basename "$GITPATH-AMD-update") ] && RUN_UPDATE=yes
+        #[ -f $(basename "$GITPATH-AMD-update") ] && RUN_UPDATE=yes
         # TODO: Should we move to "git fetch" as opposed to "git branch" here?
         if [ ! -d "$GITPATH"  ]; then   # First time
             cd $BUILD
@@ -270,7 +270,8 @@ function get_update_path() {
                 done
             fi
         fi
-        [[ "$RUN_UPDATE" == "yes" ]] && touch /$BUILD/"$BNPREFIX-AMD-update" /$BUILD/"$BNPREFIX-ARM-update"
+        # [[ "$RUN_UPDATE" == "yes" ]] && touch /$BUILD/"$BNPREFIX-AMD-update" /$BUILD/"$BNPREFIX-ARM-update"
+        [[ "$RUN_UPDATE" == "yes" ]] && touch /$BUILD/"$BNPREFIX-ARM-update"
     else
         # In chroot: check if container path above left a sentinel.
         [ -f $(basename "$BNPREFIX-ARM-update") ] && RUN_UPDATE=yes
@@ -486,6 +487,9 @@ set_debuild_config
 
 # This is what works, trial and error, I stopped at first working solution.
 # They might not be optimal or use minimal set of --git-upstream-xxx options.
+
+# TODO: It doesn't seem like there is anything preventing x86 builds when the
+#       repo is un-updated
 
 for REPO in l4fame-node l4fame-manager tm-libfuse tm-librarian; do
     get_update_path ${REPO}.git && build_via_gbp
