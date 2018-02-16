@@ -271,7 +271,7 @@ function get_update_path() {
             fi
         fi
         # [[ "$RUN_UPDATE" == "yes" ]] && touch /$BUILD/"$BNPREFIX-AMD-update" /$BUILD/"$BNPREFIX-ARM-update"
-        [[ "$RUN_UPDATE" == "yes" ]] && touch /$BUILD/"$BNPREFIX-ARM-update"
+        touch /$BUILD/"$BNPREFIX-ARM-update"
     else
         # In chroot: check if container path above left a sentinel.
         [ -f $(basename "$BNPREFIX-ARM-update") ] && RUN_UPDATE=yes
