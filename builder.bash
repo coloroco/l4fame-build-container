@@ -105,8 +105,7 @@ EOF
     # Insert a postbuild command into the middle of the gbp configuration file
     # This indicates to the arm64 chroot which repositories need to be built
     if inContainer; then    # mark repositories to be built
-        #echo "postbuild=rm ../\$(basename \$(pwd))-AMD-update" >> $HOME/.gbp.conf
-        echo "not needed"
+        echo "postbuild=rm ../\$(basename \$(pwd))-AMD-update" >> $HOME/.gbp.conf
     else
         # In chroot, mark repositories as already built
         echo "postbuild=rm ../\$(basename \$(pwd))-ARM-update" >> $HOME/.gbp.conf
@@ -160,7 +159,6 @@ function get_build_prerequisites() {
             log "Looking for 'debian' dir in branch $BRANCH"
             git checkout $BRANCH -- &>/dev/null
             [ -d "debian" ] && break
-            # TODO: get explanation for the following line
             BRANCH= # sentinel for exhausting the loop
         done
     fi
@@ -171,7 +169,6 @@ function get_build_prerequisites() {
         return
     fi
     log "get_build_prerequisites found 'debian' directory in branch $BRANCH"
-    # TODO: why are we checking for debian/rules as opposed to debian/control etc?
     if [ -e debian/rules ]; then
         dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
         collect_errors
@@ -241,15 +238,14 @@ function get_update_path() {
 
     # Only do git work in the container.  Bind links will expose it to chroot.
     if inContainer; then
-        #[ -f $(basename "$GITPATH-AMD-update") ] && RUN_UPDATE=yes
-        # TODO: Should we move to "git fetch" as opposed to "git branch" here?
+        # NOTE: Check if previous build has failed
+        [ -f "/$BUILD/$BNPREFIX-AMD-update" ] && RUN_UPDATE=yes
         if [ ! -d "$GITPATH"  ]; then   # First time
             cd $BUILD
             log "Cloning $REPO"
-            # TODO: Shouldn't we move to the next repo as opposed to dying?
             git clone "$REPO" || die "git clone $REPO failed"
             [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
-            # TODO: Checkout all the branches at least once to prevent errors
+            # NOTE: Checkout all the branches at least once to prevent errors
             cd $GITPATH
             for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
                 git checkout $BRANCH -- &>/dev/null
@@ -271,11 +267,10 @@ function get_update_path() {
                 done
             fi
         fi
-        # [[ "$RUN_UPDATE" == "yes" ]] && touch /$BUILD/"$BNPREFIX-AMD-update" /$BUILD/"$BNPREFIX-ARM-update"
-        touch /$BUILD/"$BNPREFIX-ARM-update"
+        [[ "$RUN_UPDATE" == "yes" ]] && touch "/$BUILD/$BNPREFIX-AMD-update" "/$BUILD/$BNPREFIX-ARM-update"
     else
         # In chroot: check if container path above left a sentinel.
-        [ -f $(basename "$BNPREFIX-ARM-update") ] && RUN_UPDATE=yes
+        [ -f "/$BUILD/$BNPREFIX-ARM-update" ] && RUN_UPDATE=yes
     fi
     get_build_prerequisites
     return $?
@@ -286,6 +281,10 @@ function get_update_path() {
 
 function build_via_gbp() {
     suppressed "GPB" && return 0
+    if [ -z "$RUN_UPDATE" ]; then
+        log "gbp skipping $GITPATH, no updates found"
+        return 0
+    fi
     log "gbp start at $(date)"
     GBPARGS="$*"
     cd $GITPATH
@@ -358,7 +357,7 @@ function maybe_build_arm() {
     # the directory autocreated by the qemu-debootstrap command, ie, don't
     # manually create the directory first.
 
-    log "apt-get install debootstrap qemu-user-static"
+    log "\napt-get install debootstrap qemu-user-static"
     apt-get install -y debootstrap qemu-user-static &>> $LOGFILE
     [ ! -d $CHROOT ] && qemu-debootstrap \
         --arch=arm64 $RELEASE $CHROOT http://deb.debian.org/debian/
