@@ -282,7 +282,7 @@ function get_update_path() {
 function build_via_gbp() {
     suppressed "GPB" && return 0
     if [ -z "$RUN_UPDATE" ]; then
-        log "gbp skipping $GITPATH, no updates found"
+        log "build_via_gbp skipping $GITPATH, no updates found"
         return 0
     fi
     log "gbp start at $(date)"
@@ -299,15 +299,18 @@ function build_via_gbp() {
 
 function build_kernel() {
     suppressed "Kernel build" && return 0
+    if [ -z "$RUN_UPDATE" ]; then
+        log "build_kernel skipping $GITPATH, no updates found"
+        return 0
+    fi
     cd $GITPATH
-    # TODO: Have rocky explain this checkout command
     git checkout mdc/linux-4.14.y || exit 99
     /bin/pwd
     git status
 
     log "KERNEL BUILD @ $(date)"
     if inContainer; then
-        cp config.amd64-l4fame .config
+        cp config.amd64-fame .config
     else
         cp config.arm64-mft .config
         # Already set in amd, need it for arm January 2018
@@ -328,16 +331,18 @@ function build_kernel() {
     make -j$CORES deb-pkg 2>&1 | tee -a $LOGFILE
     collect_errors
 
-    # Remove the build flag after the kernel has been made
-    if inContainer; then
-        rm ../$(basename $(pwd))-AMD-update
-    else
-        rm ../$(basename $(pwd))-ARM-update
+    # We can check if make was successful by looking for $BUILD/linux*.*
+    if [ -f $BUILD/linux*.* ]; then
+        # They end up one above $GITPATH???
+        # NOTE: Ans, yep one above $GITPATH super annoying
+        mv -f $BUILD/linux*.* $GBPOUT   # Keep them with all the others
+        # If make was successful remove the update build flag
+        if inContainer; then
+            rm ../$(basename $(pwd))-AMD-update
+        else
+            rm ../$(basename $(pwd))-ARM-update
+        fi
     fi
-
-    # They end up one above $GITPATH???
-    # NOTE: Ans, yep one above $GITPATH super annoying
-    mv -f $BUILD/linux*.* $GBPOUT   # Keep them with all the others
 
     # Sign the linux*.changes file if applicable
     [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" $GBPOUT/linux*.changes )
@@ -515,9 +520,8 @@ get_update_path tm-manifesting.git && \
 #sed -ie 's/July/Jul/' debian/changelog
 
 # The kernel has its own deb build mechanism so ignore retval on...
-# TODO: Not trying to build this for now
-#get_update_path linux-l4fame.git
-#build_kernel
+get_update_path linux-l4fame.git
+build_kernel
 
 #--------------------------------------------------------------------------
 # That's all, folks!  Move what worked.
