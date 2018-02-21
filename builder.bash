@@ -331,11 +331,11 @@ function build_kernel() {
     make -j$CORES deb-pkg 2>&1 | tee -a $LOGFILE
     collect_errors
 
+    # They end up one above $GITPATH???
+    # NOTE: Ans, yep one above $GITPATH super annoying
+    mv -f $BUILD/linux*.* $GBPOUT   # Keep them with all the others
     # We can check if make was successful by looking for $BUILD/linux*.*
-    if [ -f $BUILD/linux*.* ]; then
-        # They end up one above $GITPATH???
-        # NOTE: Ans, yep one above $GITPATH super annoying
-        mv -f $BUILD/linux*.* $GBPOUT   # Keep them with all the others
+    if [ $? -eq 0 ]; then
         # If make was successful remove the update build flag
         if inContainer; then
             rm ../$(basename $(pwd))-AMD-update
