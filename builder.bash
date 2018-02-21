@@ -325,7 +325,7 @@ function build_kernel() {
     # the "NN" in linux-image-4.14.0-l4fame+_4.14.0-l4fame+-NN_amd64.deb.
     rm -f .version  # restarts at 1
 
-    git add .
+    git add -A
     git commit -a -s -m "Removing -dirty"
     log "Now at $(/bin/pwd) ready to make"
     make -j$CORES deb-pkg 2>&1 | tee -a $LOGFILE
@@ -526,7 +526,7 @@ build_kernel
 #--------------------------------------------------------------------------
 # That's all, folks!  Move what worked.
 
-# TODO: Do we want to build the source packages as well?
+# TODO: Do we want to copy the source packages as well?
 copy_built_packages
 #cp $GBPOUT/*.deb $DEBS
 #cp $GBPOUT/*.changes $DEBS
@@ -554,7 +554,6 @@ set -u
 # The next routine should get into a chroot very quickly.
 SUPPRESSAMD=false
 # TODO: Will the script copy break because we are in $BUILD not where $0 is located?
-# TODO: Does this only trigger on the second launch of the container?
 maybe_build_arm
 
 exit 0
