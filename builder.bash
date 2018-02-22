@@ -245,7 +245,7 @@ function get_update_path() {
             log "Cloning $REPO"
             git clone "$REPO" || die "git clone $REPO failed"
             [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
-            # NOTE: Checkout all the branches at least once to prevent errors
+            # NOTE: Checkout all the branches at least once to prevent gbp errors
             cd $GITPATH
             for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
                 git checkout $BRANCH -- &>/dev/null
@@ -314,6 +314,7 @@ function build_kernel() {
     else
         cp config.arm64-mft .config
         # Already set in amd, need it for arm January 2018
+        # TODO: Should this be "fame" or "l4fame"?
         scripts/config --set-str LOCALVERSION "-l4fame"
     fi
 
@@ -323,6 +324,10 @@ function build_kernel() {
 
     # See scripts/link-vmlinux.  Reset the final numeric suffix counter,
     # the "NN" in linux-image-4.14.0-l4fame+_4.14.0-l4fame+-NN_amd64.deb.
+    # TODO: Check commit e6511d981425cb13b792abdd0524b370ce3fd59d for linux-l4fame repo
+    #       the CONFIG_LOCALVERSION_AUTO appends the value of
+    #       $(git rev-parse --verify --short HEAD) to the built packages
+    #       is this behavior we want or should NN just be 1 always
     rm -f .version  # restarts at 1
 
     git add -A
@@ -332,7 +337,6 @@ function build_kernel() {
     collect_errors
 
     # They end up one above $GITPATH???
-    # NOTE: Ans, yep one above $GITPATH super annoying
     mv -f $BUILD/linux*.* $GBPOUT   # Keep them with all the others
     # We can check if make was successful by looking for $BUILD/linux*.*
     if [ $? -eq 0 ]; then
@@ -353,7 +357,6 @@ function build_kernel() {
 ###########################################################################
 # Possibly create an arm chroot, fix it up, and run this script inside  it.
 
-# TODO: Why is this a maybe and what is required for execution?
 function maybe_build_arm() {
     ! inContainer && return 1   # infinite recursion
     suppressed "ARM building" && return 0
@@ -553,7 +556,6 @@ set -u
 # But wait there's more!  Let all AMD stuff run from here on out.
 # The next routine should get into a chroot very quickly.
 SUPPRESSAMD=false
-# TODO: Will the script copy break because we are in $BUILD not where $0 is located?
 maybe_build_arm
 
 exit 0
