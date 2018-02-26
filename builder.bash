@@ -309,7 +309,7 @@ function build_kernel() {
 
     # See scripts/link-vmlinux.  Reset the final numeric suffix counter,
     # the "NN" in linux-image-4.14.0-l4fame+_4.14.0-l4fame+-NN_amd64.deb.
-    # TODO: Check commit e6511d981425cb13b792abdd0524b370ce3fd59d for linux-l4fame repo
+    # NOTE: Check commit e6511d981425cb13b792abdd0524b370ce3fd59d for linux-l4fame repo
     #       the CONFIG_LOCALVERSION_AUTO appends the value of
     #       $(git rev-parse --verify --short HEAD) to the built packages
     #       is this behavior we want or should NN just be 1 always
@@ -367,9 +367,6 @@ function maybe_build_arm() {
 
     BUILDER="/$(basename $0)"   # Here in the container
     log "Next, cp $BUILDER $CHROOT"
-    # TODO: This assumes you're in the same dir as the builder script
-    # TODO: using "$0" gets the script even if currently executing in build dir
-    # TODO: Makes sense considering the provided Dockerfile
     cp $BUILDER $CHROOT
     chroot $CHROOT $BUILDER \
         'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
@@ -389,6 +386,7 @@ copy_built_packages () {
 
 # NOTE: Has release = stretch here, but the container is pulling from latest
 # NOTE: This has different effects under Ubuntu and Debain
+# NOTE: Set "FROM debian:stretch" in the Dockerfile
 readonly ARMDIR=/arm
 readonly RELEASE=stretch
 readonly CHROOT=$ARMDIR/$RELEASE
@@ -415,8 +413,6 @@ log "$(env | sort)"
 ELAPSED=$(date +%s)
 
 # "docker run ... -e cores=N" or suppressarm=false
-# NOTE: Values set with "-e item=value" can only be set on the first run
-# NOTE: There is no good way to change them without making a new container
 CORES=${cores:-}
 [ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
 
@@ -436,11 +432,6 @@ else
     # apt-get install -y linux-image-arm64  Austin's first try?
     # NOTE: Not sure what "linux-image-arm64" gets us. Pulled from Keith's build script
 fi
-
-# TODO: Will move to Dockerfile and push a rebuild
-# TODO: See "Note" section from the following documentation
-# TODO: https://docs.docker.com/engine/reference/builder/#env
-export DEBIAN_FRONTEND=noninteractive   # Should be in Dockerfile
 
 apt-get update && apt-get upgrade -y
 apt-get install -y git-buildpackage
@@ -524,8 +515,6 @@ for (( I=0; I < ${#WARNINGS[@]}; I++ )); do log "${WARNINGS[$I]}"; done
 log "\nERRORS:"
 for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
 
-# TODO: If there are any errors in the x86 build we just skip the arm build?
-# TODO: Seems like overkill, ask why
 [ ${#ERRORS[@]} -ne 0 ] && die "Error(s) occurred"
 
 set -u
