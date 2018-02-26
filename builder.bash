@@ -1,14 +1,5 @@
 #!/usr/bin/env bash
 
-# NOTE: all back-ticks have been swapped for $(...)
-# NOTE: indents on various loops and functions have been updated
-# NOTE: all tabs have been swapped to 4 spaces
-# NOTE: added "..." to every log() call
-# NOTE: kernel builds take forever because dpkg-deb doesn't multi-thread
-# NOTE: do we want to build the source packages as well?
-# NOTE: going to have to switch to git fetch to check for updates.
-# NOTE: changed what flags most of the repos are using
-
 # This gets copied into a container image and run.  Multiple repos are
 # pulled from GitHub and Debian x86_64 packages created from them.  The
 # resulting .deb files are deposited in the "debs" volume from the
@@ -86,7 +77,6 @@ function suppressed() {
 ###########################################################################
 # Sets the configuration file for gbp.  Note that "debian/rules" is an
 # executable file under fakeroot, with a shebang line of "#!/usr/bin/make -f"
-# NOTE: added "force-create = True" for building source packages as well
 
 GBPOUT=/gbp-build-area/
 
