@@ -456,8 +456,6 @@ set_gbp_config
 set_debuild_config
 
 
-# TODO: The Dockerfile uses debian:stretch, is this next block still relevant?
-
 # Using image debian:latest (vs :stretch) seems to have brought along
 # a more pedantic gbp that is less forgiving of branch names.
 # gbp will take branches like this:
@@ -494,17 +492,17 @@ get_update_path libfam-atomic.git && build_via_gbp --git-upstream-tree=branch
 get_update_path tm-hello-world.git && build_via_gbp --git-upstream-tree=branch --git-upstream-branch=debian
 get_update_path Emulation.git && build_via_gbp --git-upstream-branch=master
 
-# TODO: The Dockerfile uses debian:stretch, is this next block still relevant?
 # Manifesting has a bad date in debian/changelog that chokes a Perl module.
 # They got more strict in "debian:lastest".  I hate Debian.  For now...
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=795616
 get_update_path tm-manifesting.git && \
     build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master --git-cleaner=/bin/true
 
-# TODO: Do we still need the call to "sed" if the git cleaner is "/bin/true/"?
+# If we set the git cleaner is "/bin/true/" we don't need to use sed
+# This has the advantage of working for every misnamed month (was breaking an April to)
 #sed -ie 's/July/Jul/' debian/changelog
 
-# The kernel has its own deb build mechanism so ignore retval on...
+# The kernel has its own deb build mechanism so ignore return values on...
 get_update_path linux-l4fame.git
 build_kernel
 
