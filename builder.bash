@@ -223,19 +223,19 @@ function get_update_path() {
 
     # Only do git work in the container.  Bind links will expose it to chroot.
     if inContainer; then
-        # NOTE: Check if previous build has failed
+        # Check if previous build has failed
         [ -f "/$BUILD/$BNPREFIX-AMD-update" ] && RUN_UPDATE=yes
         if [ ! -d "$GITPATH"  ]; then   # First time
             cd $BUILD
             log "Cloning $REPO"
             git clone "$REPO" || die "git clone $REPO failed"
             [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
-            # NOTE: Checkout all the branches at least once to prevent gbp errors
+            # Checkout all the branches at least once to prevent gbp errors
             cd $GITPATH
             for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
                 git checkout $BRANCH -- &>/dev/null
             done
-            # NOTE: Checkout original HEAD branch
+            # Checkout original HEAD branch
             git checkout $(git branch -r | grep HEAD | cut -d'/' -f3) -- &>/dev/null
             RUN_UPDATE=yes
         else            # Update any branches that need it.
