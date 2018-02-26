@@ -496,9 +496,6 @@ set_debuild_config
 # This is what works, trial and error, I stopped at first working solution.
 # They might not be optimal or use minimal set of --git-upstream-xxx options.
 
-# TODO: It doesn't seem like there is anything preventing x86 builds when the
-#       repo is un-updated
-
 for REPO in l4fame-node l4fame-manager tm-libfuse tm-librarian; do
     get_update_path ${REPO}.git && build_via_gbp
 done
@@ -529,10 +526,7 @@ build_kernel
 #--------------------------------------------------------------------------
 # That's all, folks!  Move what worked.
 
-# TODO: Do we want to copy the source packages as well?
 copy_built_packages
-#cp $GBPOUT/*.deb $DEBS
-#cp $GBPOUT/*.changes $DEBS
 
 newlog $MASTERLOG
 let ELAPSED=$(date +%s)-ELAPSED
