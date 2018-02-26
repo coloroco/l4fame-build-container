@@ -107,8 +107,6 @@ EOF
 }
 
 ###########################################################################
-# Should only be run in the container?
-# NOTE: Needs to be run the chroot as well to configure arm debuild
 # Sets the configuration file for debuild.
 # Also checks for a signing key to build packages with
 
@@ -116,14 +114,11 @@ function set_debuild_config () {
     # Check for signing key
     if [ -f $KEYFILE ]; then
         # Remove old keys, import new one, get the key uid
-        # NOTE: added "-f" to rm to suppress errors, needed?
         rm -rf $HOME/.gnupg
         gpg --import $KEYFILE
         GPGID=$(gpg -K | grep uid | cut -d] -f2)
-        # NOTE: Remove the "-b" flag
         echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -i -j$CORES\"" > $HOME/.devscripts
     else
-        # NOTE: Remove the "-b" flag
         echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -i -j$CORES\"" > $HOME/.devscripts
     fi
 }
