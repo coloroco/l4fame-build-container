@@ -429,15 +429,15 @@ if inContainer; then     # Create the directories used in "docker run -v"
     mkdir -p $DEBS      # Root of the container
 else
     log "NOT in container"
+    # Not sure what "linux-image-arm64" gets us. Pulled from Keith's build script
     # apt-get install -y linux-image-arm64  Austin's first try?
-    # NOTE: Not sure what "linux-image-arm64" gets us. Pulled from Keith's build script
 fi
 
 apt-get update && apt-get upgrade -y
 apt-get install -y git-buildpackage
 apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 
-# NOTE: These need to be set after git-buildpackage is installed as the chroot wont have git
+# These need to be set after git-buildpackage is installed as the chroot wont have git
 git config --global user.email "example@example.com"    # for commit -s
 git config --global user.name "l4fame-build-container"
 
@@ -486,12 +486,12 @@ get_update_path Emulation.git && build_via_gbp --git-upstream-branch=master
 # Manifesting has a bad date in debian/changelog that chokes a Perl module.
 # They got more strict in "debian:lastest".  I hate Debian.  For now...
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=795616
-get_update_path tm-manifesting.git && \
-    build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master --git-cleaner=/bin/true
 
 # If we set the git cleaner is "/bin/true/" we don't need to use sed
-# This has the advantage of working for every misnamed month (was breaking an April to)
-#sed -ie 's/July/Jul/' debian/changelog
+# This has the advantage of working for every misnamed month (was breaking on April, etc)
+# sed -ie 's/July/Jul/' debian/changelog
+get_update_path tm-manifesting.git && \
+    build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master --git-cleaner=/bin/true
 
 # The kernel has its own deb build mechanism so ignore return values on...
 get_update_path linux-l4fame.git
