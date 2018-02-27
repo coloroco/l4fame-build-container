@@ -36,15 +36,6 @@ add
 ```
 to the arguments.
 
-### Pull from Dockerhub
-
-As an alternative to building the image locally, obtain it from the prebuilt
-image from Dockerhub.
-
-```
-docker pull austinhpe/l4fame-build-container
-```
-
 ## Launching the Docker container
 
 Once the Docker image has been built or downloaded it needs to be run.
@@ -59,11 +50,6 @@ Downloaded and built locally:
 docker run -t --name l4fame-build --privileged -v ~/theDebs:/debs -v L4FAME_BUILD:/build ~/deb:/deb l4fame-build
 ```
 
-Pulled down from Dockerhub:
-```
-docker run -t --name l4fame-build --privileged -v ~/theDebs:/debs -v L4FAME_BUILD:/build austinhpe/l4fame-build-container
-```
-
 To disconnect from the container without killing it run `Ctrl+C`
 
 To reconnect to the container run `docker attach l4fame-builder`
@@ -71,7 +57,7 @@ To reconnect to the container run `docker attach l4fame-builder`
 
 | Docker Flag | Explanation |
 | ----------- | ----------- |
-| `-t` | Allocates and attaches a pseudo-tty, this allows the container to be killed (ctl-C) or sent to the background. |
+| `-t` | Allocates and attaches a pseudo-tty, this allows the container to be killed (Ctrl-C) or sent to the background. |
 | `--name l4fame-build` | Names the container "l4fame-build" to simplify subsequent runs. |
 | `--privileged` | Gives the container enough privileges to enter a chroot and build arm64 packages. |
 | `-v L4FAME_BUILD:/build` | Creates a new Docker volume named L4FAME_BUILD to hold packages and temporary files as they are being built. |
