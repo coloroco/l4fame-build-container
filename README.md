@@ -90,7 +90,6 @@ Instructions for building individual packages can be found **[here](BuildRules.m
 
 ## External Links
 
-* [l4fame-build-container](https://hub.docker.com/r/austinhpe/l4fame-build-container/) - Dockerhub image for the build container
 * [debserve](https://hub.docker.com/r/davidpatawaran/debserve/) - Dockerhub image for debserve
 
 ## License
