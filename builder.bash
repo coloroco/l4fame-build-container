@@ -46,21 +46,14 @@ function collect_errors() {
 }
 
 ###########################################################################
-# Check if we're running in docker or a chroot.  Counting entries in /proc
-# is dodgy as it depends on NOT bind mounting /proc before the chroot,
-# typically a good idea.  https://stackoverflow.com/questions/23513045
-# is more robust.  Of course this depends on grep being in the target
-# environment.  The container always has it, the chroot, maybe not.
-# This breaks down for exec -it bash.   Okay, go back.
+# Check if we're running in docker or a chroot.
+# The Dockerfile creates a file of first run indicating chroot or container
 
-# TODO: We just create an indicator file using RUN in the Dockerfile
 function inContainer() {
-    [ -f /.in_docker_container ] # NOTE only works if using Dockerfile image
+    [ -f /.in_docker_container ]
     return $?
 }
 
-# TODO: How does this function work in relation to the "SUPPRESSAMD" and "SUPPRESSARM" \
-#       values as set in the very beginning and at the very end?
 function suppressed() {
     if inContainer; then
         REASON=AMD
@@ -93,11 +86,11 @@ export-dir = $GBPOUT
 EOF
 
     # Insert a postbuild command into the middle of the gbp configuration file
-    # This indicates to the arm64 chroot which repositories need to be built
-    if inContainer; then    # mark repositories to be built
+    # This indicates which repositories need to be built still
+    if inContainer; then    # mark AMD repositories as built
         echo "postbuild=rm ../\$(basename \$(pwd))-AMD-update" >> $HOME/.gbp.conf
     else
-        # In chroot, mark repositories as already built
+        # In chroot, mark ARM repositories as built
         echo "postbuild=rm ../\$(basename \$(pwd))-ARM-update" >> $HOME/.gbp.conf
     fi
     cat <<EOF >> $HOME/.gbp.conf
@@ -136,7 +129,6 @@ function get_build_prerequisites() {
     RBRANCHES=$(git branch -r | grep -v HEAD | cut -d'/' -f2)
     if [[ "$RBRANCHES" =~ "debian" ]]; then
         git checkout debian -- &>/dev/null
-        # TODO: Shouldn't we move to the next repo as opposed to dying?
         [ -d "debian" ] || die "'debian' branch has no 'debian' directory"
         BRANCH=debian
     else
@@ -384,9 +376,9 @@ copy_built_packages () {
 # MAIN
 # Set globals and accommodate docker runtime arguments.
 
-# NOTE: Has release = stretch here, but the container is pulling from latest
-# NOTE: This has different effects under Ubuntu and Debain
-# NOTE: Set "FROM debian:stretch" in the Dockerfile
+# Has release = stretch here, but the container is pulling from latest
+# This has different effects under Ubuntu and Debain
+# Set "FROM debian:stretch" in the Dockerfile
 readonly ARMDIR=/arm
 readonly RELEASE=stretch
 readonly CHROOT=$ARMDIR/$RELEASE
