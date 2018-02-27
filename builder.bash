@@ -448,7 +448,7 @@ set_debuild_config
 # 3. "master", "debian", and "upstream" and I don't know what it does
 # For all other permutations start slinging options.
 
-# Package           Branches of concern "debian" dir src in
+# Package           Branches of concern     "debian" dir    src in
 # Emulation         debian,master           debian          master
 # l4fame-manager    master                  master          n/a
 # l4fame-node       master                  master          n/a
