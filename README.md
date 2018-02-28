@@ -11,7 +11,7 @@ This build container has been tested and verified working on the following opera
 
 ## Getting Started
 
-This repository can be cloned and built locally OR a complete image can be downloaded off Dockerhub.
+This repository should be cloned and built locally.
 
 ### Set up your firewall proxies
 
@@ -19,7 +19,7 @@ If you are behind a corporate firewall, Docker needs to know.
 [This article](https://elegantinfrastructure.com/docker/ultimate-guide-to-docker-http-proxy-configuration/)
 explains it all.
 
-### Clone & Build
+### Clone & build the Docker image
 
 Clone and build the repository with:
 
@@ -36,32 +36,18 @@ add
 ```
 to the arguments.
 
-### Pull from Dockerhub
-
-As an alternative to building the image locally, obtain it from the prebuilt
-image from Dockerhub.
-
-```
-docker pull austinhpe/l4fame-build-container
-```
-
 ## Launching the Docker container
 
-Once the Docker image has been built or downloaded it needs to be run.
+Once the Docker image has been built it needs to be run.
 First create an empty directory in $HOME to hold the results:
 
 ```
-mkdir $HOME/theDebs
+mkdir -m777 $HOME/theDebs
 ```
 
-Downloaded and built locally:
+Run the container:
 ```
 docker run -t --name l4fame-build --privileged -v ~/theDebs:/debs -v L4FAME_BUILD:/build ~/deb:/deb l4fame-build
-```
-
-Pulled down from Dockerhub:
-```
-docker run -t --name l4fame-build --privileged -v ~/theDebs:/debs -v L4FAME_BUILD:/build austinhpe/l4fame-build-container
 ```
 
 To disconnect from the container without killing it run `Ctrl+C`
@@ -79,9 +65,21 @@ To reconnect to the container run `docker attach l4fame-builder`
 | `-e cores=number_of_cores` | **Optional Flag** Sets the number of cores used to compile packages. Replace `number_of_cores` with an integer value. If this flag is left off the container will automatically use half the available cpu cores capped at 8. |
 | `-e http_proxy=http://ProxyAddress:PORT`<br>`-e https_proxy=https://ProxyAddress:PORT` | **Optional Flag** Sets `http_proxy` and `https_proxy` environment variables inside the container. These flags are only needed if your host system is behind a firewall. |
 
+To completely the container:
+
+```
+docker stop l4fame-build
+docker rm l4fame-build
+docer rmi l4fame-build
+```
+
+To remove the source repos and build articfacts:
+
+```
+docker volume rm L4FAME_BUILD
+```
 
 ### End Results
-
 
 On completion ~/theDebs should contain all the packages necessary for running
 code in a FAME environment, on a SuperDome Flex global memory environment,
@@ -96,7 +94,6 @@ was enabled for AMD, ie, suppressamd=false.
 If you have enabled builder.bash for ARM, you'll see a another directory
 under theDebs, "arm64".  Under there is a similar structure: all the debs
 plus a "log" directory with multiple files as described above.
-
 
 ## Building Individual Packages
 
