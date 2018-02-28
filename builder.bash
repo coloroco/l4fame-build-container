@@ -110,7 +110,7 @@ EOF
 # Sets the configuration file for debuild.
 # Also checks for a signing key to build packages with
 
-function set_debuild_config () {
+function set_debuild_config() {
     # Check for signing key
     if [ -f $KEYFILE ]; then
         # Remove old keys, import new one, get the key uid
@@ -133,6 +133,16 @@ function set_debuild_config () {
 function get_build_prerequisites() {
     log get_build_prerequisites $GITPATH
     cd "$GITPATH"
+
+    # gbp needs to see relevant branches as local to work (ie, remote/upstream)
+    # may exist, but until it gets checked out, gbp doesn't see it).  This
+    # may be a shortcoming in my understanding of gbp.  The loop below
+    # doesn't always traverse the "git checkout" so force it here.  Some
+    # repos have overrides of the default path, so just give it a best effort.
+
+    for B in upstream master; do git checkout $B >/dev/null 2>&1; done
+
+    # Back to finding "debian" directory; give preference to a "debian" branch.
     RBRANCHES=`git branch -r | grep -v HEAD | cut -d'/' -f2`
     if [[ "$RBRANCHES" =~ "debian" ]]; then
         git checkout debian -- &>/dev/null
@@ -145,14 +155,14 @@ function get_build_prerequisites() {
             [ -d "debian" ] && break
 	    BRANCH=	# sentinel for exhausting the loop
         done
-	if [ ! "$BRANCH" ]; then
-	    MSG="No 'debian' directory in any branch of $GITPATH."
-	    log $MSG
-	    WARNINGS+=("$MSG")	# for example, kernel doesn't care
-	    return
-	fi
     fi
-    log "get_build_prerequisites found 'debian' directory in branch $BRANCH"
+    if [ ! "$BRANCH" ]; then
+	MSG="No 'debian' directory in any branch of $GITPATH."
+	log $MSG
+	WARNINGS+=("$MSG")	# not fatal, ie, kernel doesn't care
+	return
+    fi
+    log "Found 'debian' directory in branch $BRANCH"
     if [ -e debian/rules ]; then
     	dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
 	collect_errors
@@ -272,7 +282,7 @@ function build_kernel() {
 
     log "KERNEL BUILD @ `date`"
     if inContainer; then
-        cp config.amd64-l4fame .config
+        cp config.amd64-fame .config
         touch ../$(basename $(pwd))-update
     else
         cp config.arm64-mft .config
@@ -376,18 +386,16 @@ for E in CORES SUPPRESSAMD SUPPRESSARM; do
 	log "$E=$VAL"
 done
 
-# Other setup tasks
-
-git config --global user.email "example@example.com"	# for commit -s
-git config --global user.name "l4fame-build-container"
+# Final setup tasks
 
 if inContainer; then	 # Create the directories used in "docker run -v"
     log In container
+    git config --global user.email "example@example.com"   # for commit -s
+    git config --global user.name "l4fame-build-container"
     mkdir -p $BUILD		# Root of the container
     mkdir -p $DEBS		# Root of the container
 else
     log NOT in container
-    # apt-get install -y linux-image-arm64	Austin's first try?
 fi 
 
 export DEBIAN_FRONTEND=noninteractive	# Should be in Dockerfile
@@ -414,7 +422,7 @@ set_debuild_config
 # Emulation		debian,master		debian		master
 # l4fame-manager	master			master		n/a
 # l4fame-node		master			master		n/a
-# libfam-atomic		debian,master,upstream	debian,master	All three		
+# libfam-atomic		debian,master,upstream	debian,master	All three
 # nvml			debian,master,upstream	debian		All three
 # tm-hello-world	debian,master		debian		debian,master
 # tm-libfuse		debian,upstream		debian		debian,upstream
