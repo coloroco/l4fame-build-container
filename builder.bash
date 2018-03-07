@@ -6,9 +6,11 @@
 # "docker run" command.  Log files for each package build can also be
 # found there.  Packages are always downloaded but may not be built
 # per these variables.  "false" and "true" are the executables.
+# docker run ..... -e suppressxxx=true l4fame-build
 
-SUPPRESSAMD=false			# Mostly for debugging, 45 minutes
-SUPPRESSARM=${suppressarm:-false}	# FIXME: in chroot; 2 hours
+export FORCEBUILD=${forcebuild:-true}
+export SUPPRESSAMD=${suppressamd:-false}	# Mostly for debugging, 45 minutes
+export SUPPRESSARM=${suppressarm:-false}	# FIXME: in chroot; 2 hours
 
 set -u
 
@@ -43,6 +45,21 @@ function die() {
 	log "$*"
 	echo "$*" >&2
 	exit 1
+}
+
+function dump_warnings_errors() {
+	# With set -u, un-altered arrays throw an unbound error on reference.
+	set +u
+
+	log "\nWARNINGS:"
+	for (( I=0; I < ${#WARNINGS[@]}; I++ )); do log "${WARNINGS[$I]}"; done
+	
+	log "\nERRORS:"
+	for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
+
+	[ ${#ERRORS[@]} -ne 0 ] && die "Error(s) occurred"
+
+	set -u
 }
 
 ###########################################################################
@@ -86,6 +103,14 @@ function suppressed() {
 }
 
 ###########################################################################
+
+function update_name() {
+    P=`/bin/pwd`
+    TARGET="../`basename $P`-update"
+    echo $TARGET
+}
+
+###########################################################################
 # Sets the configuration file for gbp.  Note that "debian/rules" is an
 # executeable file under fakeroot, with a shebang line of "#!/usr/bin/make -f"
 # Insert a postbuild command into the middle of the gbp configuration file
@@ -97,9 +122,6 @@ function suppressed() {
 GBPOUT=/gbp-build-area/
 
 function set_gbp_config() {
-    P=`/bin/pwd`
-    TARGET="../`basename $P`-update"
-    [ inContainer ] && CMD=touch || CMD=rm
     cat <<EOGBP > $HOME/.gbp.conf
 [DEFAULT]
 cleaner = fakeroot debian/rules clean
@@ -108,7 +130,6 @@ upstream-tree = BRANCH
 
 [buildpackage]
 export-dir = $GBPOUT
-postbuild = "$CMD $TARGET"
 
 [git-import-orig]
 dch = False
@@ -198,7 +219,7 @@ function get_update_path() {
     newlog $LOGDIR/$REPOBASE.log
     log "get_update_path $REPO at `date`"
 
-    BUILDIT=
+    $FORCEBUILD && BUILDIT=yes || BUILDIT=
 
     GITPATH="$BUILD/$REPO"
     [ "$REPOBASE" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
@@ -217,6 +238,12 @@ function get_update_path() {
         RBRANCHES=`git branch -r | grep -v HEAD`
 	[[ ! "$RBRANCHES" =~ "$DESIRED" ]] && \
 		error "$DESIRED not in $REPO" && return 1
+
+	# First realize all pertinent branches for gbp
+	for B in debian master upstream; do git checkout $B >&-; done
+
+	# Where's the beef?
+	git checkout debian
 	log Checking branch $DESIRED for updates
         git checkout $DESIRED -- &>/dev/null
 	[ $? -ne 0 ] && error "git checkout $DESIRED failed" && return 1
@@ -225,7 +252,7 @@ function get_update_path() {
         [[ "$ANS" =~ "Updating" ]] && BUILDIT=yes
     else
     	# In chroot: check if container path above left a sentinel.
-    	[ -f $(basename "$GITPATH/$REPOBASE-update") ] && BUILDIT=yes
+    	[ -f $(update_name) ] && BUILDIT=yes
     fi
     cd $GITPATH			# exit condition
     [ "$BUILDIT" ] || return 1
@@ -260,12 +287,12 @@ function build_kernel() {
     log "KERNEL BUILD @ `date`"
     if inContainer; then
         cp config.amd64-fame .config
-        touch ../$(basename $(pwd))-update
+        touch `update_name`
     else
         cp config.arm64-mft .config
     	# Already set in amd, need it for arm January 2018
     	scripts/config --set-str LOCALVERSION "-l4fame"
-        rm ../$(basename $(pwd))-update
+        rm `update_name`
     fi
 
     # Suppress debug kernel - save a few minutes and 500M of space
@@ -358,7 +385,7 @@ ELAPSED=`date +%s`
 CORES=${cores:-}
 [ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
 
-for E in CORES SUPPRESSAMD SUPPRESSARM; do
+for E in CORES FORCEBUILD SUPPRESSAMD SUPPRESSARM; do
 	eval VAL=\$$E
 	log "$E=$VAL"
 done
@@ -470,26 +497,14 @@ get_update_path linux-l4fame mdc/linux-4.14.y && build_kernel
 
 cp $GBPOUT/*.deb $DEBS
 
+let ELAPSED=(`date +%s`-ELAPSED)/60
 newlog $MASTERLOG
-let ELAPSED=`date +%s`-ELAPSED
-log "Finished at `date` ($ELAPSED seconds)"
+log "Finished at `date` ($ELAPSED minutes)"
 
-# With set -u, un-altered arrays throw an XXXXX unbound error on reference.
-set +u
-
-log "\nWARNINGS:"
-for (( I=0; I < ${#WARNINGS[@]}; I++ )); do log "${WARNINGS[$I]}"; done
-
-log "\nERRORS:"
-for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
-
-[ ${#ERRORS[@]} -ne 0 ] && die "Error(s) occurred"
-
-set -u
+dump_warnings_errors
 
 # But wait there's more!  Let all AMD stuff run from here on out.
 # The next routine should get into a chroot very quickly.
-SUPPRESSAMD=false
 maybe_build_arm
 
 exit 0
