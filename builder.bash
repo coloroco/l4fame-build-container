@@ -108,7 +108,7 @@ upstream-tree = BRANCH
 
 [buildpackage]
 export-dir = $GBPOUT
-postbuild = "$CMD $FNAME"
+postbuild = "$CMD $TARGET"
 
 [git-import-orig]
 dch = False
@@ -165,6 +165,18 @@ EOF
 }
 
 ###########################################################################
+# Clarity.  Not every package follows strict Debian conventions so
+# certain failures aren't fatal.
+
+function get_build_prerequisites() {
+    [ ! -e debian/rules ] && warning "Missing 'debian/rules'" && return 0
+    dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
+    collect_errors
+    return $?
+}
+
+
+###########################################################################
 # Call with a github repository reference, example:
 # get_update_path tm-librarian master
 # will be prepended with GHDEFAULT, or supply a "full git path"
@@ -182,10 +194,10 @@ function get_update_path() {
     REPO=$1
     DESIRED=$2
     echo '-----------------------------------------------------------------'
-    log "get_update_path $REPO at `date`"
-
     REPOBASE=`basename "$REPO"`
     newlog $LOGDIR/$REPOBASE.log
+    log "get_update_path $REPO at `date`"
+
     BUILDIT=
 
     GITPATH="$BUILD/$REPO"
@@ -206,8 +218,8 @@ function get_update_path() {
 	[[ ! "$RBRANCHES" =~ "$DESIRED" ]] && \
 		error "$DESIRED not in $REPO" && return 1
 	log Checking branch $DESIRED for updates
-        git checkout $BRANCH -- &>/dev/null
-	[ $? -ne 0 ] && error "git checkout $BRANCH failed" && return 1
+        git checkout $DESIRED -- &>/dev/null
+	[ $? -ne 0 ] && error "git checkout $DESIRED failed" && return 1
         ANS=`git pull 2>&1`
 	[ $? -ne 0 ] && log "git pull on $DESIRED failed:\n$ANS" && return 1
         [[ "$ANS" =~ "Updating" ]] && BUILDIT=yes
@@ -215,11 +227,9 @@ function get_update_path() {
     	# In chroot: check if container path above left a sentinel.
     	[ -f $(basename "$GITPATH/$REPOBASE-update") ] && BUILDIT=yes
     fi
+    cd $GITPATH			# exit condition
     [ "$BUILDIT" ] || return 1
-    cd $GITPATH
-    [ ! -e debian/rules ] && error "Missing 'debian/rules'" && return 1
-    dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
-    collect_errors
+    get_build_prerequisites
     return $?
 }
 
@@ -424,36 +434,35 @@ set_debuild_config
 # Build <package.version>.orig.tar.gz from upstream (default)
 
 for REPO in l4fame-manager l4fame-node; do
-    get_update_path ${REPO}.git master && build_via_gbp
+    get_update_path $REPO master && build_via_gbp
 done
 
 for REPO in tm-hello-world tm-libfuse; do
-    get_update_path ${REPO}.git debian && build_via_gbp
+    get_update_path $REPO debian && build_via_gbp
 done
 
 fix_nvml_rules
-get_update_path nvml.git debian && \
+get_update_path nvml debian && \
     build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
 
 #--------------------------------------------------------------------------
 # Build <package.version>.orig.tar.gz from master
 for REPO in libfam-atomic tm-librarian; do 
-    get_update_path ${REPO}.git debian && \
-    build_via_gbp --git-upstream-branch=master
+    get_update_path $REPO debian && \
+    	build_via_gbp --git-upstream-branch=master
 done
 
 # Manifesting has a bad date in debian/changelog that chokes a Perl module.
 # They got more strict in "debian:lastest".  I hate Debian.  For now...
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=795616
-get_update_path tm-manifesting.git master
+get_update_path tm-manifesting master
 RET=$?
 sed -ie 's/July/Jul/' debian/changelog
 [ $RET -eq 0 ] && build_via_gbp --git-upstream-branch=master
 
 #--------------------------------------------------------------------------
-# The kernel has its own deb build mechanism so ignore retval on...
-get_update_path linux-l4fame.git mdc/linux-4.14.y
-build_kernel
+# The kernel has its own deb build mechanism
+get_update_path linux-l4fame mdc/linux-4.14.y && build_kernel
 
 #--------------------------------------------------------------------------
 # That's all, folks!  Right now it's just the debians, no
