@@ -16,6 +16,7 @@ set -u
 # Convenience routines.
 
 LOGFILE=
+declare -a ERRORS WARNINGS
 
 function newlog() {
 	LOGFILE="$1"
@@ -24,6 +25,18 @@ function newlog() {
 
 function log() {
 	echo -e "$*" | tee -a "$LOGFILE"
+}
+
+function warning() {
+	MSG="$*"
+	log $MSG
+	WARNINGS+=($MSG)
+}
+
+function error() {
+	MSG="$*"
+	log $MSG
+	ERRORS+=($MSG)
 }
 
 function die() {
@@ -36,8 +49,6 @@ function die() {
 # Must be called immediately after a command or pipeline of interest.
 # Warnings are done manually for now and indicate something odd that
 # doesn't seem to prevent success.
-
-declare -a ERRORS WARNINGS
 
 function collect_errors() {
     let SUM=`sed 's/ /+/g' <<< "${PIPESTATUS[@]}"`
@@ -77,38 +88,37 @@ function suppressed() {
 ###########################################################################
 # Sets the configuration file for gbp.  Note that "debian/rules" is an
 # executeable file under fakeroot, with a shebang line of "#!/usr/bin/make -f"
+# Insert a postbuild command into the middle of the gbp configuration file
+# This indicates to the arm64 chroot which repositories need to be built.
+# ignore-new does two things:
+# 1. builds even if there are uncommitted changes
+# 2. builds EVEN IF THE CURRENT BRANCH IS NOT THE REQUESTED BRANCH
 
 GBPOUT=/gbp-build-area/
 
-function set_gbp_config () {
-    cat <<EOF > $HOME/.gbp.conf
+function set_gbp_config() {
+    P=`/bin/pwd`
+    TARGET="../`basename $P`-update"
+    [ inContainer ] && CMD=touch || CMD=rm
+    cat <<EOGBP > $HOME/.gbp.conf
 [DEFAULT]
 cleaner = fakeroot debian/rules clean
 ignore-new = True
+upstream-tree = BRANCH
 
 [buildpackage]
 export-dir = $GBPOUT
+postbuild = "$CMD $FNAME"
 
-EOF
-
-    # Insert a postbuild command into the middle of the gbp configuration file
-    # This indicates to the arm64 chroot which repositories need to be built
-    if inContainer; then	# mark repositories to be built
-        echo "postbuild=touch ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
-    else
-        # In chroot, mark repositories as already built
-        echo "postbuild=rm ../\$(basename \$(pwd))-update" >> $HOME/.gbp.conf
-    fi
-    cat <<EOF >> $HOME/.gbp.conf
 [git-import-orig]
 dch = False
-EOF
+EOGBP
 }
 
 ###########################################################################
 # Should only be run in the container?
 # Sets the configuration file for debuild.
-# Also checks for a signing key to build packages with
+# Also checks for a signing key to build packages with.
 
 function set_debuild_config() {
     # Check for signing key
@@ -120,56 +130,6 @@ function set_debuild_config() {
         echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -b -i -j$CORES\"" > $HOME/.devscripts
     else
         echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -b -i -j$CORES\"" > $HOME/.devscripts
-    fi
-}
-
-###########################################################################
-# If there is a branch named "debian", use that;
-# Else use the first branch that contains a folder labeled debian;
-# Else die.
-# Finally, check for prerequisite build packages, and install them as needed.
-# Assumes LOGFILE is set.
-
-function get_build_prerequisites() {
-    log get_build_prerequisites $GITPATH
-    cd "$GITPATH"
-
-    # gbp needs to see relevant branches as local to work (ie, remote/upstream)
-    # may exist, but until it gets checked out, gbp doesn't see it).  This
-    # may be a shortcoming in my understanding of gbp.  The loop below
-    # doesn't always traverse the "git checkout" so force it here.  Some
-    # repos have overrides of the default path, so just give it a best effort.
-
-    for B in upstream master; do git checkout $B >/dev/null 2>&1; done
-
-    # Back to finding "debian" directory; give preference to a "debian" branch.
-    RBRANCHES=`git branch -r | grep -v HEAD | cut -d'/' -f2`
-    if [[ "$RBRANCHES" =~ "debian" ]]; then
-        git checkout debian -- &>/dev/null
-        [ -d "debian" ] || die "'debian' branch has no 'debian' directory"
-	BRANCH=debian
-    else
-        for BRANCH in $RBRANCHES; do
-	    log "Looking for 'debian' dir in branch $BRANCH"
-            git checkout $BRANCH -- &>/dev/null
-            [ -d "debian" ] && break
-	    BRANCH=	# sentinel for exhausting the loop
-        done
-    fi
-    if [ ! "$BRANCH" ]; then
-	MSG="No 'debian' directory in any branch of $GITPATH."
-	log $MSG
-	WARNINGS+=("$MSG")	# not fatal, ie, kernel doesn't care
-	return
-    fi
-    log "Found 'debian' directory in branch $BRANCH"
-    if [ -e debian/rules ]; then
-    	dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
-	collect_errors
-    else
-    	MSG="$GITPATH branch $BRANCH is missing 'debian/rules'"
-	log $MSG
-	ERRORS+=("$MSG")
     fi
 }
 
@@ -205,12 +165,14 @@ EOF
 }
 
 ###########################################################################
-# Call with a github repository URL, example:
-# get_update_path tm-librarian.git
+# Call with a github repository reference, example:
+# get_update_path tm-librarian master
 # will be prepended with GHDEFAULT, or supply a "full git path"
-# get_update_path https://github.com/SomeOtherOrg/SomeOtherRepo.git
+# get_update_path https://github.com/SomeOtherOrg/SomeOtherRepo (hold .git)
 # Sets globals:
 # $GITPATH	absolute path to code, will be working dir on success
+# Returns:	0 (true) if a new/updated repo is downloaded and should be built
+#		1 (false) if no followon build is needed
 
 readonly GHDEFAULT=https://github.com/FabricAttachedMemory
 
@@ -218,41 +180,46 @@ GITPATH="Main program"	# Set scope
 
 function get_update_path() {
     REPO=$1
-    BN=`basename "$REPO"`
-    newlog $LOGDIR/$BN.log
-    RUN_UPDATE=
+    DESIRED=$2
     echo '-----------------------------------------------------------------'
     log "get_update_path $REPO at `date`"
 
-    BNPREFIX=`basename "$BN" .git`	# strip .git off the end
-    [ "$BN" == "$BNPREFIX" ] && \
-    	log "$REPO is not a git reference" && return 1
-    GITPATH="$BUILD/$BNPREFIX"
-    [ "$BN" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
+    REPOBASE=`basename "$REPO"`
+    newlog $LOGDIR/$REPOBASE.log
+    BUILDIT=
+
+    GITPATH="$BUILD/$REPO"
+    [ "$REPOBASE" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
 
     # Only do git work in the container.  Bind links will expose it to chroot.
     if inContainer; then
-        if [ ! -d "$GITPATH"  ]; then	# First time
+        if [ ! -d "$GITPATH" ]; then	# First time
 	    cd $BUILD
 	    log Cloning $REPO
-            git clone "$REPO" || die "git clone $REPO failed"
-	    [ -d "$GITPATH" ] || die "git clone $REPO worked but no $GITPATH"
-	else			# Update any branches that need it.
-	    cd $GITPATH
-            for BRANCH in $(git branch -r | grep -v HEAD | cut -d'/' -f2); do
-	        log Checking branch $BRANCH for updates
-                git checkout $BRANCH -- &>/dev/null
-		[ $? -ne 0 ] && log "git checkout $BRANCH failed" && return 1
-                ANS=$(git pull)
-		[ $? -ne 0 ] && log "git pull on $BRANCH failed" && return 1
-                [[ "$ANS" =~ "Updating" ]] && RUN_UPDATE=yes # && break
-            done
+            git clone ${REPO}.git 
+	    [ $? -ne 0 ] && error "git clone $REPO failed" && return 1
+	    BUILDIT=yes
 	fi
+	[ ! -d "$GITPATH" ] && error "Missing $GITPATH" && return 1
+	cd $GITPATH
+        RBRANCHES=`git branch -r | grep -v HEAD`
+	[[ ! "$RBRANCHES" =~ "$DESIRED" ]] && \
+		error "$DESIRED not in $REPO" && return 1
+	log Checking branch $DESIRED for updates
+        git checkout $BRANCH -- &>/dev/null
+	[ $? -ne 0 ] && error "git checkout $BRANCH failed" && return 1
+        ANS=`git pull 2>&1`
+	[ $? -ne 0 ] && log "git pull on $DESIRED failed:\n$ANS" && return 1
+        [[ "$ANS" =~ "Updating" ]] && BUILDIT=yes
     else
     	# In chroot: check if container path above left a sentinel.
-    	[ -f $(basename "$GITPATH-update") ] && RUN_UPDATE=yes
+    	[ -f $(basename "$GITPATH/$REPOBASE-update") ] && BUILDIT=yes
     fi
-    get_build_prerequisites
+    [ "$BUILDIT" ] || return 1
+    cd $GITPATH
+    [ ! -e debian/rules ] && error "Missing 'debian/rules'" && return 1
+    dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
+    collect_errors
     return $?
 }
 
@@ -418,51 +385,81 @@ set_debuild_config
 # 3. "master", "debian", and "upstream" and I don't know what it does
 # For all other permutations start slinging options.
 
-# Package		Branches of concern	"debian" dir	src in
-# Emulation		debian,master		debian		master
+# Package		Branches of concern	"debian" dir/	src in
+#						build from/
+#						private gbp.conf
+
+# Emulation		debian,master		n/a		debian,master
+#						master
+#						no
 # l4fame-manager	master			master		n/a
+#						master
+#						no
 # l4fame-node		master			master		n/a
+#						master
+#						no
 # libfam-atomic		debian,master,upstream	debian,master	All three
+#						debian
+#						YES
 # nvml			debian,master,upstream	debian		All three
+#						debian
+#						YES
 # tm-hello-world	debian,master		debian		debian,master
-# tm-libfuse		debian,upstream		debian		debian,upstream
+#						debian
+#						YES
+# tm-libfuse		debian,hp_l4tm,upstream	debian,hp_l4tm	All three
+#						debian
+#						YES
 # tm-librarian		debian,master,upstream	debian,master	All three
+#						debian
+#						YES
 # tm-manifesting	master			master		master
+#						master
+#						no
 
-# This is what works, trial and error, I stopped at first working solution.
-# They might not be optimal or use minimal set of --git-upstream-xxx options.
+# Build happens from wherever the repo is sitting (--git-ignore-new = True).
+# Position the repo appropriately.
 
-for REPO in l4fame-node l4fame-manager tm-hello-world tm-libfuse; do
-    get_update_path ${REPO}.git && build_via_gbp
+#--------------------------------------------------------------------------
+# Build <package.version>.orig.tar.gz from upstream (default)
+
+for REPO in l4fame-manager l4fame-node; do
+    get_update_path ${REPO}.git master && build_via_gbp
+done
+
+for REPO in tm-hello-world tm-libfuse; do
+    get_update_path ${REPO}.git debian && build_via_gbp
 done
 
 fix_nvml_rules
-get_update_path nvml.git && \
+get_update_path nvml.git debian && \
     build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
 
+#--------------------------------------------------------------------------
+# Build <package.version>.orig.tar.gz from master
 for REPO in libfam-atomic tm-librarian; do 
-    get_update_path ${REPO}.git && \
-    build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master
+    get_update_path ${REPO}.git debian && \
+    build_via_gbp --git-upstream-branch=master
 done
-
-get_update_path Emulation.git && build_via_gbp --git-upstream-branch=master
 
 # Manifesting has a bad date in debian/changelog that chokes a Perl module.
 # They got more strict in "debian:lastest".  I hate Debian.  For now...
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=795616
-get_update_path tm-manifesting.git
+get_update_path tm-manifesting.git master
+RET=$?
 sed -ie 's/July/Jul/' debian/changelog
-build_via_gbp --git-upstream-tree=branch --git-upstream-branch=master
+[ $RET -eq 0 ] && build_via_gbp --git-upstream-branch=master
 
+#--------------------------------------------------------------------------
 # The kernel has its own deb build mechanism so ignore retval on...
-get_update_path linux-l4fame.git
+get_update_path linux-l4fame.git mdc/linux-4.14.y
 build_kernel
 
 #--------------------------------------------------------------------------
-# That's all, folks!  Move what worked.
+# That's all, folks!  Right now it's just the debians, no
+# *.[build|buildinfo|changes|dsc|orig.tar.gz|.
 
 cp $GBPOUT/*.deb $DEBS
-cp $GBPOUT/*.changes $DEBS
 
 newlog $MASTERLOG
 let ELAPSED=`date +%s`-ELAPSED
