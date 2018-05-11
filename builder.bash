@@ -144,6 +144,10 @@ EOGBP
 # Sets the configuration file for debuild.
 # Also checks for a signing key to build packages with.
 
+# NEW: check for signing key on each invocation of gbp and add
+# appropriate parameters.  Each project has debian/gbp.conf with
+# debuild -us -uc embedded; as of this writing there are no keys.
+
 function set_debuild_config() {
     # Check for signing key
     if [ -f $KEYFILE ]; then
@@ -243,11 +247,10 @@ function get_update_path() {
 	[[ ! "$RBRANCHES" =~ "$DESIRED" ]] && \
 		error "$DESIRED not in $REPO" && return 1
 
-	# First realize all pertinent branches for gbp
-	for B in debian master upstream; do git checkout $B >&-; done
+	# Realize all pertinent branches locally for gbp
+	for B in debian master upstream; do git checkout $B -- >&-; done
 
 	# Where's the beef?
-	git checkout debian
 	log Checking branch $DESIRED for updates
         git checkout $DESIRED -- &>/dev/null
 	[ $? -ne 0 ] && error "git checkout $DESIRED failed" && return 1
@@ -265,12 +268,12 @@ function get_update_path() {
 }
 
 ###########################################################################
-# Depends on a correct $GITPATH, branch, and $LOGFILE being preselected.
+# Assumes the desired $GITPATH, branch, and $LOGFILE have been preselected.
 
 function build_via_gbp() {
     suppressed "GPB" && return 0
     log "gbp start at `date`"
-    GBPARGS="$*"
+    GBPARGS="-j$CORES --git-export-dir=$GBPOUT $*"
     cd $GITPATH
     log "$GITPATH args: $GBPARGS"
     eval "gbp buildpackage $GBPARGS" 2>&1 | tee -a $LOGFILE
@@ -360,12 +363,6 @@ function maybe_build_arm() {
 ###########################################################################
 # Using image debian:latest (vs :stretch) seems to have brought along
 # a more pedantic gbp that is less forgiving of branch names.
-# gbp will take branches like this:
-# 1. Only "master" if it has a "debian" directory
-# 2. "master" without a "debian" directory if there's a branch named "debian"
-#    with a "debian" directory
-# 3. "master", "debian", and "upstream" and I don't know what it does
-# For all other permutations start slinging options.
 
 # Package		Branches of concern	"debian" dir/	src in
 #						build from/
@@ -376,10 +373,10 @@ function maybe_build_arm() {
 #						no
 # l4fame-manager	master			master		n/a
 #						master
-#						no
+#						YES
 # l4fame-node		master			master		n/a
 #						master
-#						no
+#						YES
 # libfam-atomic		debian,master,upstream	debian,master	All three
 #						debian
 #						YES
@@ -392,25 +389,32 @@ function maybe_build_arm() {
 # tm-libfuse		debian,hp_l4tm,upstream	debian,hp_l4tm	All three
 #						debian
 #						YES
-# tm-librarian		debian,master,upstream	debian,master	All three
-#						debian
+# tm-librarian		debian,upstream		debian		upstream
+#						merged master
 #						YES
 # tm-manifesting	master			master		master
 #						master
-#						no
+#						YES
 
 # Build happens from wherever the repo is sitting (--git-ignore-new = True).
-# Position the repo appropriately.
+# Position the repo appropriately.  <package.version>.orig.tar.gz "source"
+# is specified in each repo's debian/gbp.conf.
 
 function rock_and_roll() {
-    #----------------------------------------------------------------------
-    # Build <package.version>.orig.tar.gz from upstream (default)
 
-    for REPO in l4fame-manager l4fame-node; do
+    # Only one branch with source.  What a concept. 
+    for REPO in tm-librarian; do
+	get_update_path_repo $REPO debian
+	git branch -D master >&-
+	git checkout --orphan master
+	build_via_gbp
+    done
+
+    for REPO in l4fame-manager l4fame-node tm-manifesting; do
 	get_update_path $REPO master && build_via_gbp
     done
 
-    for REPO in tm-hello-world tm-libfuse; do
+    for REPO in libfam-atomic tm-hello-world tm-libfuse; do
 	get_update_path $REPO debian && build_via_gbp
     done
 
@@ -418,27 +422,11 @@ function rock_and_roll() {
     get_update_path nvml debian && \
 	build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
 
-    #----------------------------------------------------------------------
-    # Build <package.version>.orig.tar.gz from master
-    for REPO in libfam-atomic tm-librarian; do 
-	get_update_path $REPO debian && \
-	    build_via_gbp --git-upstream-branch=master
-    done
-
-    # Manifesting has a bad date in debian/changelog that chokes a Perl module.
-    # They got more strict in "debian:lastest".  I hate Debian.  For now...
-    # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=795616
-    get_update_path tm-manifesting master
-    RET=$?
-    sed -ie 's/July/Jul/' debian/changelog
-    [ $RET -eq 0 ] && build_via_gbp --git-upstream-branch=master
-
-    #--------------------------------------------------------------------------
     # The kernel has its own deb build mechanism
     get_update_path linux-l4fame mdc/linux-4.14.y && build_kernel
 }
 
-###########################################################################
+############################################################################
 # MAIN
 # Set globals and accommodate docker runtime arguments.
 
@@ -496,8 +484,9 @@ apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 #--------------------------------------------------------------------------
 # Change into build directory, set the configuration files, then BUILD!
 cd $BUILD
-set_gbp_config
-set_debuild_config
+
+# set_gbp_config	Not any more: all projects have debian/gbp.conf
+# set_debuild_config	Not any more: use extra args to gbp invocation
 
 rock_and_roll
 

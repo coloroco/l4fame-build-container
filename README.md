@@ -47,10 +47,19 @@ mkdir -m777 $HOME/theDebs
 
 Run the container:
 ```
-docker run -t --name l4fame-build --privileged -v ~/theDebs:/debs -v L4FAME_BUILD:/build ~/deb:/deb l4fame-build
+docker run -t --name l4fame-build --privileged -v ~/theDebs:/debs -v L4FAME_BUILD:/build l4fame-build
 ```
 
-To disconnect from the container without killing it run `Ctrl+C`
+If you're behind a firewall and have the standard environment variables set,
+add
+
+```
+--env http_proxy=$http_proxy --env https_proxy=$https_proxy
+```
+to the arguments.
+
+To disconnect from the container without killing it, type `Ctrl+C` in the
+window in which you executed "docker run ..."
 
 To reconnect to the container run `docker attach l4fame-builder`
 
