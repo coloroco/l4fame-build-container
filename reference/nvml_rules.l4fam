@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	dh_auto_install -- prefix=/usr
+
+override_dh_install:
+	mkdir -p debian/tmp/usr/share/nvml/
+	cp utils/nvml.magic debian/tmp/usr/share/nvml/
+	-mv -f debian/tmp/usr/lib64 debian/tmp/usr/lib
+	dh_install
+
+override_dh_auto_test:
+	echo "We do not test this code yet."
+
+override_dh_clean:
+	find src/ -name 'config.status' -delete
+	find src/ -name 'config.log' -delete
+	dh_clean

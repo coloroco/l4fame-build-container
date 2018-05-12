@@ -1,0 +1,17 @@
+# NEW: check for signing key on each invocation of gbp and add
+# appropriate parameters.  Each project has debian/gbp.conf with
+# debuild -us -uc embedded; as of this writing there are no keys.
+
+function set_debuild_config() {
+    # Check for signing key
+    if [ -f $KEYFILE ]; then
+        # Remove old keys, import new one, get the key uid
+        rm -r $HOME/.gnupg
+        gpg --import $KEYFILE
+        GPGID=$(gpg -K | grep uid | cut -d] -f2)
+        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-k'$GPGID' -b -i -j$CORES\"" > $HOME/.devscripts
+    else
+        echo "DEBUILD_DPKG_BUILDPACKAGE_OPTS=\"-us -uc -b -i -j$CORES\"" > $HOME/.devscripts
+    fi
+}
+

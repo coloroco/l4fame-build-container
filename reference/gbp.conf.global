@@ -1,0 +1,11 @@
+[DEFAULT]
+cleaner = fakeroot debian/rules clean
+ignore-new = True
+upstream-tree = BRANCH
+
+[buildpackage]
+export-dir = $GBPOUT
+
+[git-import-orig]
+dch = False
+EOGBP
