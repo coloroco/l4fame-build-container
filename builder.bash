@@ -9,42 +9,57 @@
 # docker run ..... -e suppressxxx=true l4fame-build
 
 export FORCEBUILD=${forcebuild:-true}
-export SUPPRESSAMD=${suppressamd:-false}	# Mostly for debugging, 45 minutes
-export SUPPRESSARM=${suppressarm:-false}	# FIXME: in chroot; 2 hours
-export SUPPRESSKERNEL=${suppresskernel:-false}	# Most of the time
+export SUPPRESSAMD=${suppressamd:-false}	# for debug, saves 45 minutes
+export SUPPRESSARM=${suppressarm:-true}		# FIXME: in chroot; 2 hours
+export SUPPRESSKERNEL=${suppresskernel:-false}	# for debug, saves 5 minutes
 
 set -u
 
-###########################################################################
-# Convenience routines.
+# Global directories
 
-LOGFILE=
-declare -a ERRORS WARNINGS
+readonly BUILD=/build
+readonly DEBS=/debs
+readonly GBPOUT=/gbp-build-area
+
+###########################################################################
+# Convenience routines.  Can't call them in early execution until their
+# "private" globals have been set.
+
+readonly LOGDIR=$DEBS/logs
+readonly MASTERLOG=00_mainloop.log
+LOGFILE=$LOGDIR/$MASTERLOG
+declare -i LOGSEQ=1
 
 function newlog() {
+    if [ "$1" = "$MASTERLOG" ]; then	# Verbatim
 	LOGFILE="$1"
-	mkdir -p `dirname "$LOGFILE"`
+    else			# Track ordinality of this build
+	LOGFILE="`printf '%02d' $LOGSEQ`_$1"
+	let LOGSEQ++
+    fi
+    LOGFILE="$LOGDIR/$LOGFILE"
 }
 
 function log() {
-	echo -e "$*" | tee -a "$LOGFILE"
+	TS=`date +'%H:%M:%S'`
+	echo -e "$TS $*" | tee -a "$LOGFILE"
 }
 
+declare -a WARNINGS
 function warning() {
-	MSG="$*"
-	log $MSG
-	WARNINGS+=($MSG)
+	MSG=`log "$*"`		# Capture stdout which has TS
+	WARNINGS+=("$MSG")
 }
 
+declare -a ERRORS
 function error() {
-	MSG="$*"
-	log $MSG
-	ERRORS+=($MSG)
+	MSG=`log "$*"`		# Capture stdout which has TS
+	ERRORS+=("$MSG")
 }
 
 function die() {
-	log "$*"
-	echo "$*" >&2
+	MSG=`log "$*"`		# Capture stdout which has TS
+	echo "$MSG" >&2
 	exit 1
 }
 
@@ -52,15 +67,18 @@ function dump_warnings_errors() {
 	# With set -u, un-altered arrays throw an unbound error on reference.
 	set +u
 
-	log "\nWARNINGS:"
-	for (( I=0; I < ${#WARNINGS[@]}; I++ )); do log "${WARNINGS[$I]}"; done
+	log "WARNINGS:"
+	for (( I=0; I < ${#WARNINGS[@]}; I++ )); do echo "${WARNINGS[$I]}"; done
 	
-	log "\nERRORS:"
-	for (( I=0; I < ${#ERRORS[@]}; I++ )); do log "${ERRORS[$I]}"; done
+	log "ERRORS:"
+	for (( I=0; I < ${#ERRORS[@]}; I++ )); do echo "${ERRORS[$I]}"; done
 
-	[ ${#ERRORS[@]} -ne 0 ] && die "Error(s) occurred"
+	[ ${#ERRORS[@]} -eq 0 ]
+	RET=$?
 
 	set -u
+
+	return $RET
 }
 
 ###########################################################################
@@ -172,9 +190,9 @@ GITPATH="Main program"	# Set scope
 function get_update_path() {
     REPO=$1
     DESIRED=$2
-    echo '-----------------------------------------------------------------'
+    echo '---------------------------------------------------------------------'
     REPOBASE=`basename "$REPO"`
-    newlog $LOGDIR/$REPOBASE.log
+    newlog $REPOBASE.log
     log "get_update_path $REPO at `date`"
 
     $FORCEBUILD && BUILDIT=yes || BUILDIT=
@@ -197,23 +215,27 @@ function get_update_path() {
 	[[ ! "$RBRANCHES" =~ "$DESIRED" ]] && \
 		error "$DESIRED not in $REPO" && return 1
 
-	# Realize all pertinent branches locally for gbp
-	for B in debian master upstream; do git checkout $B -- >&-; done
+	# Realize all pertinent branches locally for gbp.
+	for B in debian master upstream; do
+	    git checkout $B -- >&-
+	    if [ $? -eq 0 ]; then
+		git clean -dff >&-		# Paranoia on a re-run
+        	ANS=`git pull 2>&1`
+		[ $? -ne 0 ] && error "git pull $B failed" && return 1
+        	[[ "$ANS" =~ "Updating" ]] && BUILDIT=yes # yes, any of them
+	    else
+	    	[ $B == $DESIRED ] && error "$REPO doesn't have $B" && return 1
+	    fi
+	done
 
-	# Where's the beef?
-	log Checking branch $DESIRED for updates
-        git checkout $DESIRED -- &>/dev/null
-	[ $? -ne 0 ] && error "git checkout $DESIRED failed" && return 1
-        ANS=`git pull 2>&1`
-	[ $? -ne 0 ] && log "git pull on $DESIRED failed:\n$ANS" && return 1
-        [[ "$ANS" =~ "Updating" ]] && BUILDIT=yes
+	# Exit condition
+        git checkout $DESIRED -- &>-
+	[ $? -ne 0 ] && error "Final git checkout $DESIRED failed" && return 1
     else
     	# In chroot: check if container path above left a sentinel.
     	[ -f $(update_name) ] && BUILDIT=yes
     fi
     cd $GITPATH			# exit condition
-    [ "$BUILDIT" ] || return 1
-    get_build_prerequisites
     return $?
 }
 
@@ -222,9 +244,11 @@ function get_update_path() {
 
 function build_via_gbp() {
     suppressed "GPB" && return 0
+    [ "$BUILDIT" ] || return 1
     log "gbp start at `date`"
-    GBPARGS="-j$CORES --git-export-dir=$GBPOUT $*"
     cd $GITPATH
+    get_build_prerequisites
+    GBPARGS="-j$CORES --git-export-dir=$GBPOUT $*"
     log "$GITPATH args: $GBPARGS"
     eval "gbp buildpackage $GBPARGS" 2>&1 | tee -a $LOGFILE
     harvest_pipeline_errors
@@ -352,30 +376,39 @@ function maybe_build_arm() {
 
 function rock_and_roll() {
 
-    # Only one branch with source.  What a concept. 
+    # Only one branch with source.  What a concept.  FIXME: add detection
+    # instead of a list.  Scan debian/gbp.conf for upstream-branch and
+    # debian-branch.  If upstream-branch == upstream && there is no master
+    # and there is a debian branch, do this merging.
     for REPO in tm-librarian; do
-	get_update_path_repo $REPO debian
+	get_update_path $REPO debian || die "Couldn't git $REPO"
+	log "Clearing local branch master and branching debian as orphan"
 	git branch -D master >&-
-	git checkout --orphan master
-	build_via_gbp
+	git checkout --orphan master || die "debian-orphan failed for $REPO"
+	MERGED=`git merge --strategy-option=theirs upstream 2>&1`
+	[ $? -ne 0 ] && error "git merge upstream failed\n$MERGED" && return 1
+	build_via_gbp || return 1
     done
+    return 1
 
     # Only a master branch, and no upstream.   Master does double duty.
     # manager and node are metapackages, without real source.  manifesting
     # should be converted to the one-copy model.
     for REPO in l4fame-manager l4fame-node tm-manifesting; do
 	get_update_path $REPO master && build_via_gbp
+	[ $? -ne 0 ] && error "get/build failed for $REPO" && return 1
     done
 
     # debian and upstream, some with master.  Build from debian but
     # convert these to the "one-copy" model.
-    for REPO in libfam-atomic tm-hello-world tm-libfuse; do
+    for REPO in libfam-atomic nvml tm-hello-world tm-libfuse; do
 	get_update_path $REPO debian && build_via_gbp
+	[ $? -ne 0 ] && error "get/build failed for $REPO" && return 1
     done
 
-    fix_nvml_rules
-    get_update_path nvml debian && \
-	build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
+    # fix_nvml_rules
+    # get_update_path nvml debian && \
+	# build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
 
     # The kernel has its own deb build mechanism
     get_update_path linux-l4fame mdc/linux-4.14.y && build_kernel
@@ -393,18 +426,14 @@ GPGID=
 # "docker run ... -v ...". They are the same from both the container and 
 # the chroot.
 
-readonly BUILD=/build
-readonly DEBS=/debs
 readonly KEYFILE=/keyfile.key	# optional
-readonly LOGDIR=$DEBS/logs
-readonly MASTERLOG=$LOGDIR/1st.log
 
-rm -rf $LOGDIR
-mkdir -p $LOGDIR
+rm -rf $LOGDIR || die "Cannot rm -rf $LOGDIR"
+mkdir -p $LOGDIR || die "Cannot mkdir $LOGDIR"
+newlog $MASTERLOG	# Generic main loop; re-set for each package
 
 echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 ELAPSED=`date +%s`
-newlog $MASTERLOG		# Generic; re-set for each package
 log "Started at `date`"
 log "$*"
 log "`env | sort`"
@@ -442,6 +471,7 @@ apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 
 cd $BUILD
 rock_and_roll
+RARRET=$?
 cp $GBPOUT/*.deb $DEBS
 
 #--------------------------------------------------------------------------
@@ -451,6 +481,7 @@ newlog $MASTERLOG
 log "Finished at `date` ($ELAPSED minutes)"
 
 dump_warnings_errors
+[ $? -ne 0 -o $RARRET -ne 0 ] && die "Errors occurred"
 
 # But wait there's more!  Let all AMD stuff run from here on out.
 # The next routine should get into a chroot very quickly.
