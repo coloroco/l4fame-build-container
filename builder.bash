@@ -8,18 +8,23 @@
 # per these variables.  "false" and "true" are the executables.
 # docker run ..... -e suppressxxx=true l4fame-build
 
-export FORCEBUILD=${forcebuild:-true}
-export SUPPRESSAMD=${suppressamd:-false}	# for debug, saves 45 minutes
-export SUPPRESSARM=${suppressarm:-true}		# FIXME: in chroot; 2 hours
-export SUPPRESSKERNEL=${suppresskernel:-false}	# for debug, saves 5 minutes
+# SUPPRESSXXX is usually for debugging, skipping things that work and
+# saving time to reach broken things faster.  Time is for 90 cores.
+# The variables are executed at runtime and resolve to /bin/[true|false]
+export SUPPRESSAMD=${SUPPRESSAMD:-false}	# saves 45 minutes
+export SUPPRESSARM=${SUPPRESSARM:-false}	# in chroot; saves 1 hour
+export SUPPRESSKERNEL=${SUPPRESSKERNEL:-false}	# 5-8 minutes AMD, 45 ARM
+
+# Override optimizations that might skip building.  There aren't many.
+export FORCEBUILD=${FORCEBUILD:-true}
 
 set -u
 
 # Global directories
 
-readonly BUILD=/build
-readonly DEBS=/debs
-readonly GBPOUT=/gbp-build-area
+readonly ALLGITS=/allgits		# Where "git clone" goes
+readonly DEBS=/debs			# Where finished packages go
+readonly GBPOUT=/gbp-build-area		# Where "gbp --git-export-dir" goes
 
 ###########################################################################
 # Convenience routines.  Can't call them in early execution until their
@@ -42,7 +47,8 @@ function newlog() {
 
 function log() {
 	TS=`date +'%H:%M:%S'`
-	echo -e "$TS $*" | tee -a "$LOGFILE"
+	inContainer && WHERE=AMD || WHERE=ARM
+	echo -e "$TS ${WHERE}: $*" | tee -a "$LOGFILE"
 }
 
 declare -a WARNINGS
@@ -122,42 +128,12 @@ function suppressed() {
 }
 
 ###########################################################################
+# Sentinel from container (AMD and git work) to chroot (ARM work)
 
-function update_name() {
+function update_sentinel() {
     P=`/bin/pwd`
     TARGET="../`basename $P`-update"
     echo $TARGET
-}
-
-###########################################################################
-# Builds a new debian/rules file for nvml
-
-function fix_nvml_rules() {
-    read -r -d '' rule << "EOF"
-#!/usr/bin/make -f
-%:
-\tdh \$@
-
-override_dh_auto_install:
-\tdh_auto_install -- prefix=/usr
-
-override_dh_install:
-\tmkdir -p debian/tmp/usr/share/nvml/
-\tcp utils/nvml.magic debian/tmp/usr/share/nvml/
-\t-mv -f debian/tmp/usr/lib64 debian/tmp/usr/lib
-\tdh_install
-
-override_dh_auto_test:
-\techo "We do not test this code yet."
-
-override_dh_clean:
-\tfind src/ -name 'config.status' -delete
-\tfind src/ -name 'config.log' -delete
-\tdh_clean
-EOF
-
-    echo -e "$rule" > /tmp/rules
-    chmod +x /tmp/rules
 }
 
 ###########################################################################
@@ -197,44 +173,51 @@ function get_update_path() {
 
     $FORCEBUILD && BUILDIT=yes || BUILDIT=
 
-    GITPATH="$BUILD/$REPO"
+    GITPATH="$ALLGITS/$REPO"
     [ "$REPOBASE" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
 
-    # Only do git work in the container.  Bind links will expose it to chroot.
-    if inContainer; then
-        if [ ! -d "$GITPATH" ]; then	# First time
-	    cd $BUILD
-	    log Cloning $REPO
-            git clone ${REPO}.git 
-	    [ $? -ne 0 ] && error "git clone $REPO failed" && return 1
-	    BUILDIT=yes
-	fi
-	[ ! -d "$GITPATH" ] && error "$REPO no path \"$GITPATH\"" && return 1
-	cd $GITPATH
-        RBRANCHES=`git branch -r | grep -v HEAD`
-	[[ ! "$RBRANCHES" =~ "$DESIRED" ]] && \
-		error "$DESIRED not in $REPO" && return 1
+    # Only do git work in the container.  Bind mounts will expose it to chroot.
+    if ! inContainer; then
+        cd $GITPATH || die "Cannot cd $GITPATH"
+    	[ -f "`update_sentinel`" ] && BUILDIT=yes
+	git checkout $DESIRED -- || die "Cannot checkout $DESIRED"
+	return $?
+    fi
 
-	# Realize all pertinent branches locally for gbp.
-	for B in debian master upstream; do
+    # In container, aka the AMD pass
+    if [ ! -d "$GITPATH" ]; then	# First time
+	cd $ALLGITS
+	log Cloning $REPO
+        git clone ${REPO}.git 
+	[ $? -ne 0 ] && error "git clone $REPO failed" && return 1
+	BUILDIT=yes
+    fi
+    [ ! -d "$GITPATH" ] && error "$REPO no path \"$GITPATH\"" && return 1
+    cd $GITPATH
+    RBRANCHES=`git branch -r | grep -v HEAD`
+    [[ ! "$RBRANCHES" =~ "$DESIRED" ]] && \
+	error "$DESIRED not in $REPO" && return 1
+
+    # Locally instantiate all pertinent remote branches.
+    for B in debian master upstream; do
+	if [[ ! "$RBRANCHES" =~ "$B" ]]; then	# NOT for a merged master!
+	    log "Probing for branch $B"
 	    git checkout $B -- >&-
 	    if [ $? -eq 0 ]; then
-		git clean -dff >&-		# Paranoia on a re-run
-        	ANS=`git pull 2>&1`
-		[ $? -ne 0 ] && error "git pull $B failed" && return 1
-        	[[ "$ANS" =~ "Updating" ]] && BUILDIT=yes # yes, any of them
+		# 1. It might be a re-run.  Do some cleanup.
+		git clean -dff >&-
+		# 2. It might not exist.  It's not an error.
+       		ANS=`git pull 2>&1`
+       		[[ "$ANS" =~ "Updating" ]] && BUILDIT=yes # yes, any of them
 	    else
-	    	[ $B == $DESIRED ] && error "$REPO doesn't have $B" && return 1
+	    	[ $B == $DESIRED ] && error "checkout $B failed" && return 1
 	    fi
-	done
+	fi
+    done
 
-	# Exit condition
-        git checkout $DESIRED -- &>-
-	[ $? -ne 0 ] && error "Final git checkout $DESIRED failed" && return 1
-    else
-    	# In chroot: check if container path above left a sentinel.
-    	[ -f $(update_name) ] && BUILDIT=yes
-    fi
+    # Exit condition
+    git checkout $DESIRED -- >&-
+    [ $? -ne 0 ] && error "Final git checkout $DESIRED failed" && return 1
     cd $GITPATH			# exit condition
     return $?
 }
@@ -269,12 +252,12 @@ function build_kernel() {
     log "KERNEL BUILD @ `date`"
     if inContainer; then
         cp config.amd64-fame .config
-        touch `update_name`
+        touch `update_sentinel`
     else
         cp config.arm64-mft .config
     	# Already set in amd, need it for arm January 2018
     	scripts/config --set-str LOCALVERSION "-l4fame"
-        rm `update_name`
+        rm `update_sentinel`
     fi
 
     # Suppress debug kernel - save a few minutes and 500M of space
@@ -292,7 +275,7 @@ function build_kernel() {
     harvest_pipeline_errors
 
     # They end up one above $GITPATH???
-    mv -f $BUILD/linux*.* $GBPOUT	# Keep them with all the others
+    mv -f $ALLGITS/linux*.* $GBPOUT	# Keep them with all the others
 
     # Sign the linux*.changes file if applicable
     [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" $GBPOUT/linux*.changes )
@@ -304,8 +287,8 @@ function build_kernel() {
 # Possibly create an arm chroot, fix it up, and run this script inside  it.
 
 function maybe_build_arm() {
-    ! inContainer && return 1	# infinite recursion
-    suppressed "ARM building" && return 0
+    ! inContainer && die "Bad call to maybe_build_arm" && return 1
+    $SUPPRESSARM && log "ARM build is suppressed" && return 0
 
     # build an arm64 chroot if none exists.  The sentinel is the existence of
     # the directory autocreated by the qemu-debootstrap command, ie, don't
@@ -316,21 +299,20 @@ function maybe_build_arm() {
     [ ! -d $CHROOT ] && qemu-debootstrap \
     	--arch=arm64 $RELEASE $CHROOT http://deb.debian.org/debian/
 
-    mkdir -p $CHROOT$BUILD		# Root of the chroot
+    mkdir -p $CHROOT$ALLGITS		# Root of the chroot
     mkdir -p $CHROOT$DEBS		# Root of the chroot
 
     # Bind mounts allow access from inside the chroot
-    mount --bind $BUILD $CHROOT$BUILD		# ie, the git checkout area
+    mount --bind $ALLGITS $CHROOT$ALLGITS	# ie, the git checkout area
     mkdir -p $DEBS/arm64
     mount --bind $DEBS/arm64 $CHROOT$DEBS	# ARM debs also visible
 
     [ -f $KEYFILE ] && cp $KEYFILE $CHROOT
 
     BUILDER="/$(basename $0)"	# Here in the container
-    log Next, cp $BUILDER $CHROOT
+    log Copying $BUILDER to $CHROOT for chroot
     cp $BUILDER $CHROOT
-    chroot $CHROOT $BUILDER \
-    	'cores=$CORES' 'http_proxy=$http_proxy' 'https_proxy=$https_proxy'
+    chroot $CHROOT $BUILDER
     return $?
 }
 
@@ -372,43 +354,46 @@ function maybe_build_arm() {
 
 # Build happens from wherever the repo is sitting (--git-ignore-new = True).
 # Position the repo appropriately.  <package.version>.orig.tar.gz "source"
-# is specified in each repo's debian/gbp.conf.
+# is specified in each repo's debian/gbp.conf, as are the upstream-branch
+# and debian-branch.
 
 function rock_and_roll() {
-
-    # Only one branch with source.  What a concept.  FIXME: add detection
-    # instead of a list.  Scan debian/gbp.conf for upstream-branch and
+    # Only one branch with source: what a concept.  FIXME: add detection
+    # instead of this list.  Scan debian/gbp.conf for upstream-branch and
     # debian-branch.  If upstream-branch == upstream && there is no master
     # and there is a debian branch, do this merging.
     for REPO in tm-librarian; do
 	get_update_path $REPO debian || die "Couldn't git $REPO"
-	log "Clearing local branch master and branching debian as orphan"
-	git branch -D master >&-
+	if git branch | grep -q master; then	# Get rid of it and start fresh
+	    log "Reset master branch"
+	    git checkout master --
+	    git clean -dff
+	    git checkout debian --
+	    git branch -D master || die "Couldn't delete master branch"
+	fi
+	git status | grep -q 'On branch debian' || die "Not on debian"
 	git checkout --orphan master || die "debian-orphan failed for $REPO"
 	MERGED=`git merge --strategy-option=theirs upstream 2>&1`
-	[ $? -ne 0 ] && error "git merge upstream failed\n$MERGED" && return 1
+	[ $? -ne 0 ] && die "git merge upstream failed\n$MERGED"
+	ls -CF
 	build_via_gbp || return 1
     done
-    return 1
 
-    # Only a master branch, and no upstream.   Master does double duty.
-    # manager and node are metapackages, without real source.  manifesting
-    # should be converted to the one-copy model.
-    for REPO in l4fame-manager l4fame-node tm-manifesting; do
-	get_update_path $REPO master && build_via_gbp
-	[ $? -ne 0 ] && error "get/build failed for $REPO" && return 1
-    done
-
-    # debian and upstream, some with master.  Build from debian but
-    # convert these to the "one-copy" model.
+    # debian and upstream, some with master that might be HPE/MFT specfic.
+    # Build from debian.  FIXME convert these to the "one-copy" model above.
     for REPO in libfam-atomic nvml tm-hello-world tm-libfuse; do
 	get_update_path $REPO debian && build_via_gbp
 	[ $? -ne 0 ] && error "get/build failed for $REPO" && return 1
     done
 
-    # fix_nvml_rules
-    # get_update_path nvml debian && \
-	# build_via_gbp "--git-prebuild='mv -f /tmp/rules debian/rules'"
+    # Only a master branch and no upstream; master does double duty.
+    # manager and node are metapackages, without real source.  manifesting
+    # should be converted to the one-copy model.  The others could fit
+    # into a detection scheme which skips the merge to master.
+    for REPO in l4fame-manager l4fame-node tm-manifesting; do
+	get_update_path $REPO master && build_via_gbp
+	[ $? -ne 0 ] && error "get/build failed for $REPO" && return 1
+    done
 
     # The kernel has its own deb build mechanism
     get_update_path linux-l4fame mdc/linux-4.14.y && build_kernel
@@ -436,16 +421,12 @@ echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 ELAPSED=`date +%s`
 log "Started at `date`"
 log "$*"
+
+# "docker run ... -e CORES=N" or SUPPRESSARM=true
+CORES=${CORES:-}
+[ "$CORES" ] || let CORES=(`nproc`+1)/2
+
 log "`env | sort`"
-
-# "docker run ... -e cores=N" or suppressarm=false
-CORES=${cores:-}
-[ "$CORES" ] || CORES=$((( $(nproc) + 1) / 2))
-
-for E in CORES FORCEBUILD SUPPRESSAMD SUPPRESSARM; do
-	eval VAL=\$$E
-	log "$E=$VAL"
-done
 
 # Final setup tasks
 
@@ -453,7 +434,7 @@ if inContainer; then	 # Create the directories used in "docker run -v"
     log In container
     git config --global user.email "example@example.com"   # for commit -s
     git config --global user.name "l4fame-build-container"
-    mkdir -p $BUILD		# Root of the container
+    mkdir -p $ALLGITS		# Root of the container
     mkdir -p $DEBS		# Root of the container
 else
     log NOT in container
@@ -469,7 +450,7 @@ apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 # Change into build directory and go.  Just keep the debians, no
 # *.[build|buildinfo|changes|dsc|orig.tar.gz|.
 
-cd $BUILD
+cd $ALLGITS
 rock_and_roll
 RARRET=$?
 cp $GBPOUT/*.deb $DEBS
@@ -481,7 +462,7 @@ newlog $MASTERLOG
 log "Finished at `date` ($ELAPSED minutes)"
 
 dump_warnings_errors
-[ $? -ne 0 -o $RARRET -ne 0 ] && die "Errors occurred"
+[ $? -ne 0 -o $RARRET -ne 0 ] && die "Error(s) occurred"
 
 # But wait there's more!  Let all AMD stuff run from here on out.
 # The next routine should get into a chroot very quickly.
