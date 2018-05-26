@@ -287,7 +287,7 @@ function build_kernel() {
 # Possibly create an arm chroot, fix it up, and run this script inside  it.
 
 function maybe_build_arm() {
-    ! inContainer && die "Bad call to maybe_build_arm" && return 1
+    ! inContainer && log "Unsupported call to maybe_build_arm" && return 1
     $SUPPRESSARM && log "ARM build is suppressed" && return 0
 
     # build an arm64 chroot if none exists.  The sentinel is the existence of
