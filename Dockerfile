@@ -1,7 +1,7 @@
 FROM debian:latest
 
-LABEL maintainer="Austin Hunting"
-LABEL maintainer_email="austin.hunting@hpe.com"
+LABEL maintainer="Rocky Craig"
+LABEL maintainer_email="rocky.craig@hpe.com"
 
 ENV DEBIAN_FRONTEND=noninteractive
 

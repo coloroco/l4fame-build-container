@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 
 # This gets copied into a container image and run.  Multiple repos are
-# pulled from Github and Debian x86_64 packages created from them.  The
+# pulled from Github and Debian packages created from them.  The
 # resulting .deb files are deposited in the "debs" volume from the
 # "docker run" command.  Log files for each package build can also be
-# found there.  Packages are always downloaded but may not be built
-# per these variables.  "false" and "true" are the executables.
-# docker run ..... -e suppressxxx=true l4fame-build
+# found there.  The script is then copied into an architectural chroot
+# and run again,  with bind mounts providing the same global paths.
+
+# This script uses git-build-package and depends on a "debian/gbp.conf"
+# in one branch of each repo.  Right now the repos are disjoint as to
+# which branch has what, but unification is underway.
 
 # SUPPRESSXXX is usually for debugging, skipping things that work and
-# saving time to reach broken things faster.  Time is for 90 cores.
-# The variables are executed at runtime and resolve to /bin/[true|false]
+# saving time to reach broken things faster.  The variables are executed at
+# runtime and resolve to /bin/[true|false].  Packages are always downloaded
+# but may not be built: docker run ..... -e SUPPRESSXXX=true l4fame-build
+# Time savings are based on using 90 cores iton parallel builds.
+
 export SUPPRESSAMD=${SUPPRESSAMD:-false}	# saves 45 minutes
 export SUPPRESSARM=${SUPPRESSARM:-false}	# in chroot; saves 1 hour
 export SUPPRESSKERNEL=${SUPPRESSKERNEL:-false}	# 5-8 minutes AMD, 45 ARM
@@ -30,10 +36,10 @@ readonly GBPOUT=/gbp-build-area		# Where "gbp --git-export-dir" goes
 # Convenience routines.  Can't call them in early execution until their
 # "private" globals have been set.
 
-readonly LOGDIR=$DEBS/logs
-readonly MASTERLOG=00_mainloop.log
-LOGFILE=$LOGDIR/$MASTERLOG
-declare -i LOGSEQ=1
+readonly LOGDIR=$DEBS/logs		# Per-architecture
+declare -i LOGSEQ=1			# Sequence number for child logs
+readonly MASTERLOG=00_mainloop.log	# One before the starting LOGSEQ
+LOGFILE=$LOGDIR/$MASTERLOG		# Gotta start somewhere
 
 function newlog() {
     if [ "$1" = "$MASTERLOG" ]; then	# Verbatim
@@ -47,8 +53,7 @@ function newlog() {
 
 function log() {
 	TS=`date +'%H:%M:%S'`
-	inContainer && WHERE=AMD || WHERE=ARM
-	echo -e "$TS ${WHERE}: $*" | tee -a "$LOGFILE"
+	echo -e "$TS ${TARGET_ARCH}: $*" | tee -a "$LOGFILE"
 }
 
 declare -a WARNINGS
@@ -93,13 +98,14 @@ function dump_warnings_errors() {
 # doesn't seem to prevent success.
 
 function harvest_pipeline_errors() {
-    let SUM=`sed 's/ /+/g' <<< "${PIPESTATUS[@]}"`
-    [ $SUM -ne 0 ] && ERRORS+=("$SUM error(s) in a pipeline of $GITPATH")
+    let SUM=`sed 's/ /+/g' <<< "${PIPESTATUS[@]}"`	# first
+    [ $# -gt 0 ] && MSG="$*" || MSG="a"
+    [ $SUM -ne 0 ] && ERRORS+=("${TARGET_ARCH}: $SUM error(s) in $MSG pipeline of $GITPATH")
     return $SUM
 }
 
 ###########################################################################
-# Check if we're running in docker or a chroot.  Counting entries in /proc
+# Check if running in docker or a chroot.  Counting entries in /proc
 # is dodgy as it depends on NOT bind mounting /proc before the chroot,
 # typically a good idea.  https://stackoverflow.com/questions/23513045
 # is more robust.  Of course this depends on grep being in the target
@@ -113,6 +119,8 @@ function inContainer() {
 	[ `ls /proc | wc -l` -gt 0 ]
 	return $?
 }
+
+###########################################################################
 
 function suppressed() {
 	if inContainer; then
@@ -128,25 +136,15 @@ function suppressed() {
 }
 
 ###########################################################################
-# Sentinel from container (AMD and git work) to chroot (ARM work)
-
-function update_sentinel() {
-    P=`/bin/pwd`
-    TARGET="../`basename $P`-update"
-    echo $TARGET
-}
-
-###########################################################################
-# Clarity.  Not every package follows strict Debian conventions so
+# Clarity.  Not every repo branch follows strict Debian conventions so
 # certain failures aren't fatal.
 
 function get_build_prerequisites() {
     [ ! -e debian/rules ] && warning "`basename $GITPATH` missing debian/rules" && return 0
     dpkg-checkbuilddeps &>/dev/null || (echo "y" | mk-build-deps -i -r)
-    harvest_pipeline_errors
+    harvest_pipeline_errors "get_build_prereq"
     return $?
 }
-
 
 ###########################################################################
 # Call with a github repository reference, example:
@@ -155,6 +153,8 @@ function get_build_prerequisites() {
 # get_update_path https://github.com/SomeOtherOrg/SomeOtherRepo (hold .git)
 # Sets globals:
 # $GITPATH	absolute path to code, will be working dir on success
+# $GITRBRANCHES	The remote branches in the repo
+# $GITBUILDIT	Boolean
 # Returns:	0 (true) if a new/updated repo is downloaded and should be built
 #		  If passed in, FORCEBUILD will override
 #		1 (false) if no followon build is needed
@@ -162,64 +162,56 @@ function get_build_prerequisites() {
 readonly GHDEFAULT=https://github.com/FabricAttachedMemory
 
 GITPATH="Main program"	# Set scope
+GITRBRANCHES="Larry Curly Moe"
+$FORCEBUILD && GITBUILDIT=yes || GITBUILDIT=
 
 function get_update_path() {
-    REPO=$1
-    DESIRED=$2
-    echo '---------------------------------------------------------------------'
-    REPOBASE=`basename "$REPO"`
-    newlog $REPOBASE.log
-    log "get_update_path $REPO at `date`"
-
-    $FORCEBUILD && BUILDIT=yes || BUILDIT=
+    local REPO=$1	# a simple name like "nvml", or full URI https...git
+    local GITDEBIANPATH=$2
 
     GITPATH="$ALLGITS/$REPO"
-    [ "$REPOBASE" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
 
-    # Only do git work in the container.  Bind mounts will expose it to chroot.
-    if ! inContainer; then
-        cd $GITPATH || die "Cannot cd $GITPATH"
-    	[ -f "`update_sentinel`" ] && BUILDIT=yes
-	git checkout $DESIRED -- || die "Cannot checkout $DESIRED"
-	return $?
+    echo '---------------------------------------------------------------------'
+    REPOBASE=`basename "$REPO"`	# In case they passed a full URI
+    newlog $REPOBASE.log
+    log "get_update_path $REPO"
+
+    # Only do git clone/pull work in the (original) container so that trailing
+    # chroots use the same source, presented via bind mounts.
+    if inContainer; then
+	if [ ! -d "$GITPATH" ]; then	# First time
+	    cd $ALLGITS
+	    [ "$REPOBASE" == "$REPO" ] && REPO="${GHDEFAULT}/${REPO}"
+	    log Cloning $REPO
+	    git clone ${REPO}.git 
+	    [ $? -ne 0 ] && error "git clone $REPO failed" && return 1
+	    GITBUILDIT=yes
+	fi
     fi
 
-    # In container, aka the AMD pass
-    if [ ! -d "$GITPATH" ]; then	# First time
-	cd $ALLGITS
-	log Cloning $REPO
-        git clone ${REPO}.git 
-	[ $? -ne 0 ] && error "git clone $REPO failed" && return 1
-	BUILDIT=yes
-    fi
-    [ ! -d "$GITPATH" ] && error "$REPO no path \"$GITPATH\"" && return 1
-    cd $GITPATH
-    RBRANCHES=`git branch -r | grep -v HEAD`
-    [[ ! "$RBRANCHES" =~ "$DESIRED" ]] && \
-	error "$DESIRED not in $REPO" && return 1
+    # Both container and chroots need this.
+    ! cd $GITPATH && error "cd \"$GITPATH\" failed" && return 1
+    GITRBRANCHES=`git branch -r | grep -v HEAD`
+    [[ ! "$GITRBRANCHES" =~ "$GITDEBIANPATH" ]] && \
+	error "$GITDEBIANPATH not in $REPO" && return 1
 
     # Locally instantiate all pertinent remote branches.
     for B in debian master upstream; do
-	if [[ ! "$RBRANCHES" =~ "$B" ]]; then	# NOT for a merged master!
+	if [[ "$GITRBRANCHES" =~ "$B" ]]; then
 	    log "Probing for branch $B"
 	    git checkout $B -- >&-
-	    if [ $? -eq 0 ]; then
-		# 1. It might be a re-run.  Do some cleanup.
-		git clean -dff >&-
-		# 2. It might not exist.  It's not an error.
-       		ANS=`git pull 2>&1`
-       		[[ "$ANS" =~ "Updating" ]] && BUILDIT=yes # yes, any of them
-	    else
-	    	[ $B == $DESIRED ] && error "checkout $B failed" && return 1
-	    fi
+	    [ $? -ne 0 ] && error "git checkout $B failed" && return 1
+	    # It might be a re-run.  Clean it up, then check for updates
+	    git clean -dff >&-
+	    ANS=`git pull 2>&1`
+	    [[ "$ANS" =~ "Updating" ]] && GITBUILDIT=yes # yes, any of them
 	fi
     done
 
     # Exit condition
-    git checkout $DESIRED -- >&-
-    [ $? -ne 0 ] && error "Final git checkout $DESIRED failed" && return 1
-    cd $GITPATH			# exit condition
-    return $?
+    git checkout $GITDEBIANPATH -- >&- && return 0
+    error "Final git checkout $GITDEBIANPATH failed"
+    return 1
 }
 
 ###########################################################################
@@ -227,15 +219,19 @@ function get_update_path() {
 
 function build_via_gbp() {
     suppressed "GPB" && return 0
-    [ "$BUILDIT" ] || return 1
+    # This optimization is a holdover from original author and may
+    # not actually be useful.
+    [ -z "$GITBUILDIT" ] && log "GITBUILDIT is false" && return 1
     log "gbp start at `date`"
-    cd $GITPATH
+    cd $GITPATH || return 1
     get_build_prerequisites
     GBPARGS="-j$CORES --git-export-dir=$GBPOUT $*"
     log "$GITPATH args: $GBPARGS"
     eval "gbp buildpackage $GBPARGS" 2>&1 | tee -a $LOGFILE
-    harvest_pipeline_errors
+    harvest_pipeline_errors "build_via_gbp"
+    RET=$?
     log "gbp finished at `date`"
+    return $RET
 }
 
 ###########################################################################
@@ -243,7 +239,7 @@ function build_via_gbp() {
 
 function build_kernel() {
     suppressed "Kernel build" && return 0
-    suppresskernel && log "Kernel explicitly suppressed" && return 0
+    $SUPPRESSKERNEL && log "Kernel explicitly suppressed" && return 0
     cd $GITPATH
     git checkout mdc/linux-4.14.y || die "Cannot switch to kernel LTS branch"
     /bin/pwd
@@ -252,12 +248,10 @@ function build_kernel() {
     log "KERNEL BUILD @ `date`"
     if inContainer; then
         cp config.amd64-fame .config
-        touch `update_sentinel`
     else
         cp config.arm64-mft .config
     	# Already set in amd, need it for arm January 2018
     	scripts/config --set-str LOCALVERSION "-l4fame"
-        rm `update_sentinel`
     fi
 
     # Suppress debug kernel - save a few minutes and 500M of space
@@ -272,7 +266,7 @@ function build_kernel() {
     git commit -a -s -m "Removing -dirty"
     log "Now at `/bin/pwd` ready to make"
     make -j$CORES deb-pkg 2>&1 | tee -a $LOGFILE
-    harvest_pipeline_errors
+    harvest_pipeline_errors "build_kernel"
 
     # They end up one above $GITPATH???
     mv -f $ALLGITS/linux*.* $GBPOUT	# Keep them with all the others
@@ -285,14 +279,13 @@ function build_kernel() {
 
 ###########################################################################
 # Possibly create an arm chroot, fix it up, and run this script inside  it.
+# The sentinel is the existence of the directory autocreated by the 
+# qemu-debootstrap command; don't manually create the directory first.
 
 function maybe_build_arm() {
-    ! inContainer && log "Unsupported call to maybe_build_arm" && return 1
+    ! inContainer && return 0	# Stop the recursion
     $SUPPRESSARM && log "ARM build is suppressed" && return 0
-
-    # build an arm64 chroot if none exists.  The sentinel is the existence of
-    # the directory autocreated by the qemu-debootstrap command, ie, don't
-    # manually create the directory first.
+    TARGET_ARCH=ARM		# Future actions on behalf of this
 
     log apt-get install debootstrap qemu-user-static
     apt-get install -y debootstrap qemu-user-static &>> $LOGFILE
@@ -305,7 +298,7 @@ function maybe_build_arm() {
     # Bind mounts allow access from inside the chroot
     mount --bind $ALLGITS $CHROOT$ALLGITS	# ie, the git checkout area
     mkdir -p $DEBS/arm64
-    mount --bind $DEBS/arm64 $CHROOT$DEBS	# ARM debs also visible
+    mount --bind $DEBS/arm64 $CHROOT$DEBS	# ARM debs now exposed
 
     [ -f $KEYFILE ] && cp $KEYFILE $CHROOT
 
@@ -317,8 +310,7 @@ function maybe_build_arm() {
 }
 
 ###########################################################################
-# Using image debian:latest (vs :stretch) seems to have brought along
-# a more pedantic gbp that is less forgiving of branch names.
+# The packages of interest all did it differently.  Welcome to Linux.
 
 # Package		Branches of concern	"debian" dir/	src in
 #						build from/
@@ -357,46 +349,69 @@ function maybe_build_arm() {
 # is specified in each repo's debian/gbp.conf, as are the upstream-branch
 # and debian-branch.
 
+###########################################################################
+# Only one branch with source: what a concept.  FIXME: add detection
+# instead of this list.  Scan debian/gbp.conf for upstream-branch and
+# debian-branch.  If upstream-branch == upstream && there is no master
+# and there is a debian branch, do this merging.
+
+function merge_debian_upstream_into_master() {
+    REPO=$1
+    [[ "$GITRBRANCHES" =~ master ]] && \
+	error "Remote master exists in $REPO" && return 1
+    for B in debian upstream; do
+    	[[ ! "$GITRBRANCHES" =~ "$B" ]] && \
+	    error "Remote $B does NOT exist in $REPO" && return 1
+    done
+
+    # Always start with no master.  "git clean" gets rid of artifacts
+    # from a previous run that could interfere with "checkout debian".
+    if git branch | grep -q master; then
+	log "Remove local master branch"
+	git checkout master --
+	git clean -dff
+	git checkout debian --
+	git branch -D master || die "Couldn't delete master branch"
+    fi
+    git status | grep -q 'On branch debian' || die "Not on debian"
+    git checkout --orphan master || die "debian-orphan failed for $REPO"
+    MERGED=`git merge --strategy-option=theirs upstream 2>&1`
+    [ $? -ne 0 ] && error "git merge upstream failed\n$MERGED" && return 1
+    ls -CF
+    return 0
+}
+
+###########################################################################
+# Build them all, hardcoding the idiosyncracies for now.
+
 function rock_and_roll() {
-    # Only one branch with source: what a concept.  FIXME: add detection
-    # instead of this list.  Scan debian/gbp.conf for upstream-branch and
-    # debian-branch.  If upstream-branch == upstream && there is no master
-    # and there is a debian branch, do this merging.
+    # Pure source in upstream; only packaging stuff in debian.  Merge
+    # them into a local, no-remote "master" and build.
     for REPO in tm-librarian; do
-	get_update_path $REPO debian || die "Couldn't git $REPO"
-	if git branch | grep -q master; then	# Get rid of it and start fresh
-	    log "Reset master branch"
-	    git checkout master --
-	    git clean -dff
-	    git checkout debian --
-	    git branch -D master || die "Couldn't delete master branch"
-	fi
-	git status | grep -q 'On branch debian' || die "Not on debian"
-	git checkout --orphan master || die "debian-orphan failed for $REPO"
-	MERGED=`git merge --strategy-option=theirs upstream 2>&1`
-	[ $? -ne 0 ] && die "git merge upstream failed\n$MERGED"
-	ls -CF
+	get_update_path $REPO debian || return 1
+	merge_debian_upstream_into_master $REPO || return 1
 	build_via_gbp || return 1
     done
 
-    # debian and upstream, some with master that might be HPE/MFT specfic.
-    # Build from debian.  FIXME convert these to the "one-copy" model above.
+    # Source in both debian and upstream; any master is HPE/MFT specfic.
+    # Build from debian.  FIXME: convert these to the "one-copy" model above.
     for REPO in libfam-atomic nvml tm-hello-world tm-libfuse; do
-	get_update_path $REPO debian && build_via_gbp
-	[ $? -ne 0 ] && error "get/build failed for $REPO" && return 1
+	get_update_path $REPO debian || return 1
+	build_via_gbp || return 1
     done
 
     # Only a master branch and no upstream; master does double duty.
-    # manager and node are metapackages, without real source.  manifesting
-    # should be converted to the one-copy model.  The others could fit
-    # into a detection scheme which skips the merge to master.
+    # l4fame-manager and l4fame-node are metapackages without real source.
+    # tm-manifesting should be converted to the one-copy model.
     for REPO in l4fame-manager l4fame-node tm-manifesting; do
-	get_update_path $REPO master && build_via_gbp
-	[ $? -ne 0 ] && error "get/build failed for $REPO" && return 1
+	get_update_path $REPO master || return 1
+	build_via_gbp || return 1
     done
 
     # The kernel has its own deb build mechanism
-    get_update_path linux-l4fame mdc/linux-4.14.y && build_kernel
+    get_update_path linux-l4fame mdc/linux-4.14.y || return 1
+    build_kernel
+    return $?
 }
 
 ############################################################################
@@ -407,6 +422,7 @@ readonly ARMDIR=/arm
 readonly RELEASE=stretch
 readonly CHROOT=$ARMDIR/$RELEASE
 GPGID=
+inContainer && TARGET_ARCH=AMD || TARGET_ARCH=ARM
 
 # "docker run ... -v ...". They are the same from both the container and 
 # the chroot.
