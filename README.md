@@ -1,13 +1,13 @@
 # L4fame Build Container
 
-This repository contains a bash script and Dockerfile that will pull and build the Fabric Attached Memory packages necessary for running code on The Machine.
+This repository contains a bash script and Dockerfile that will pull and build the Fabric Attached Memory packages necessary for running code on The Machine, FAME (Fabric Attached Memory Emulation), and various SuperDome products.  [These packages are all in Github under the Fabric Attached Memory organization](https://github.com/FabricAttachedMemory).
 
 ### Known Working Environments
 This build container has been tested and verified working on the following operating systems :
 - Red Hat Enterprise Linux 7.3
 - Ubuntu 17.04
 - Fedora 26
-- Debian Jessie
+- Debian Jessie and Stretch
 
 ## Getting Started
 
@@ -28,8 +28,7 @@ git clone git@github.com:FabricAttachedMemory/l4fame-build-container.git
 cd l4fame-build-container && docker build --tag l4fame-build .
 ```
 
-If you're behind a firewall and have the standard environment variables set,
-add
+If you're behind a firewall and have the standard environment variables set, add
 
 ```
 --build-arg http_proxy=$http_proxy --build-arg https_proxy=$https_proxy
@@ -38,8 +37,7 @@ to the arguments.
 
 ## Launching the Docker container
 
-Once the Docker image has been built it needs to be run.
-First create an empty directory in $HOME to hold the results:
+Once the Docker image has been built it needs to be run. First create an empty directory in $HOME to hold the results:
 
 ```
 mkdir -m777 $HOME/theDebs
@@ -50,8 +48,7 @@ Run the container:
 docker run -t --name l4fame-build --privileged -v ~/theDebs:/debs -v L4FAME_BUILD:/build l4fame-build
 ```
 
-If you're behind a firewall and have the standard environment variables set,
-add
+If you're behind a firewall and have the standard environment variables set, add
 
 ```
 --env http_proxy=$http_proxy --env https_proxy=$https_proxy
@@ -71,18 +68,19 @@ To reconnect to the container run `docker attach l4fame-builder`
 | `--privileged` | Gives the container enough privileges to enter a chroot and build arm64 packages. |
 | `-v L4FAME_BUILD:/build` | Creates a new Docker volume named L4FAME_BUILD to hold packages and temporary files as they are being built. |
 | `-v ~/theDebs:/debs` | Mounts a local folder ($HOME/theDebs) to store the finished packages. |
-| `-e cores=number_of_cores` | **Optional Flag** Sets the number of cores used to compile packages. Replace `number_of_cores` with an integer value. If this flag is left off the container will automatically use half the available cpu cores capped at 8. |
+| `-e cores=number_of_cores` | **Optional Flag** Sets the number of cores used to compile packages. Replace `number_of_cores` with an integer value. If this flag is left off the container will automatically use half the available cpu cores. |
 | `-e http_proxy=http://ProxyAddress:PORT`<br>`-e https_proxy=https://ProxyAddress:PORT` | **Optional Flag** Sets `http_proxy` and `https_proxy` environment variables inside the container. These flags are only needed if your host system is behind a firewall. |
+| `-e SUPPRESSAMD=true|false<br>`-e SUPPRESSARM=true|false` | **Optional Flag** By default build packages for both AMD/x86_64 and ARM64 |
 
-To completely the container:
+To completely remove the container:
 
 ```
 docker stop l4fame-build
 docker rm l4fame-build
-docer rmi l4fame-build
+docker rmi l4fame-build
 ```
 
-To remove the source repos and build articfacts:
+To remove the source repos and build artifacts:
 
 ```
 docker volume rm L4FAME_BUILD
@@ -96,11 +94,11 @@ or The Machine itself (ARM).
 
 At the top level will be all the packages and a directory called "logs".
 Under logs is one file per built package, making it easy to troubleshoot 
-build problems.  There is also a file named "1stlog", a global catchall
+build problems.  There is also a file named "00_mainloop.log", a global catchall
 for builder.bash flow.   These files are only created if builder.bash
-was enabled for AMD, ie, suppressamd=false.
+was enabled for AMD (the default).
 
-If you have enabled builder.bash for ARM, you'll see a another directory
+If you have enabled builder.bash for ARM (the default), you'll see a another directory
 under theDebs, "arm64".  Under there is a similar structure: all the debs
 plus a "log" directory with multiple files as described above.
 
@@ -109,9 +107,6 @@ plus a "log" directory with multiple files as described above.
 Instructions for building individual packages can be found **[here](BuildRules.md)**
 
 ## External Links
-
-* [l4fame-build-container](https://hub.docker.com/r/austinhpe/l4fame-build-container/) - Dockerhub image for the build container
-* [debserve](https://hub.docker.com/r/davidpatawaran/debserve/) - Dockerhub image for debserve
 
 ## License
 
