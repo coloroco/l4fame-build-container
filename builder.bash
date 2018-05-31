@@ -28,9 +28,9 @@ set -u
 
 # Global directories
 
-readonly ALLGITS=/allgits		# Where "git clone" goes
-readonly DEBS=/debs			# Where finished packages go
-readonly GBPOUT=/gbp-build-area		# Where "gbp --git-export-dir" goes
+readonly ALLGITS=/allgits		# "git clone" here
+readonly DEBS=/debs			# Container<->host gateway
+readonly GBPOUT=/gbp-build-area		# "gbp --git-export-dir" and *.deb
 
 ###########################################################################
 # Convenience routines.  Can't call them in early execution until their
@@ -147,10 +147,12 @@ function get_build_prerequisites() {
 }
 
 ###########################################################################
-# Call with a github repository reference, example:
+# Call with a github repository reference and an "exit" branch, example:
 # get_update_path tm-librarian master
 # will be prepended with GHDEFAULT, or supply a "full git path"
 # get_update_path https://github.com/SomeOtherOrg/SomeOtherRepo (hold .git)
+# Build occurs from wherever the repo is sitting (--git-ignore-new = True).
+# Position the repo appropriately ($2).
 # Sets globals:
 # $GITPATH	absolute path to code, will be working dir on success
 # $GITRBRANCHES	The remote branches in the repo
@@ -216,6 +218,9 @@ function get_update_path() {
 
 ###########################################################################
 # Assumes the desired $GITPATH, branch, and $LOGFILE have been preselected.
+# --git-export-dir is where the source is copied, one level down, in a
+# directory named by repo and changelog version.  The final xxxx.deb files
+# go one directory above that copied source, i.e., directly into $GBPOUT.
 
 function build_via_gbp() {
     suppressed "GPB" && return 0
@@ -224,13 +229,17 @@ function build_via_gbp() {
     [ -z "$GITBUILDIT" ] && log "GITBUILDIT is false" && return 1
     log "gbp start at `date`"
     cd $GITPATH || return 1
-    get_build_prerequisites
+    get_build_prerequisites	# not for kernel
     GBPARGS="-j$CORES --git-export-dir=$GBPOUT $*"
     log "$GITPATH args: $GBPARGS"
     eval "gbp buildpackage $GBPARGS" 2>&1 | tee -a $LOGFILE
     harvest_pipeline_errors "build_via_gbp"
     RET=$?
-    log "gbp finished at `date`"
+    find $GBPOUT -name '*.deb' 2>&- | while read D; do
+    	log $D
+	mv $D $DEBS
+    done
+    log "gbp finished"
     return $RET
 }
 
@@ -264,17 +273,19 @@ function build_kernel() {
 
     git add . 
     git commit -a -s -m "Removing -dirty"
-    log "Now at `/bin/pwd` ready to make"
+    log "Now at `/bin/pwd` ready to make deb-pkg"
     make -j$CORES deb-pkg 2>&1 | tee -a $LOGFILE
     harvest_pipeline_errors "build_kernel"
+    RET=$?
 
-    # They end up one above $GITPATH???
-    mv -f $ALLGITS/linux*.* $GBPOUT	# Keep them with all the others
+    # Artifacts end up one above $GITPATH.  Possibly sign the linux*.changes,
+    # then ignore it.
+    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" $ALLGITS/linux*.changes )
 
-    # Sign the linux*.changes file if applicable
-    [ "$GPGID" ] && ( echo "n" | debsign -k"$GPGID" $GBPOUT/linux*.changes )
+    mv -f $ALLGITS/linux*.deb $DEBS
 
-    log "kernel finished at `date`"
+    log "kernel finished, $RET error(s)"
+    return $RET
 }
 
 ###########################################################################
@@ -308,46 +319,6 @@ function maybe_build_arm() {
     chroot $CHROOT $BUILDER
     return $?
 }
-
-###########################################################################
-# The packages of interest all did it differently.  Welcome to Linux.
-
-# Package		Branches of concern	"debian" dir/	src in
-#						build from/
-#						private gbp.conf
-
-# Emulation		debian,master		n/a		debian,master
-#						master
-#						no
-# l4fame-manager	master			master		n/a
-#						master
-#						YES
-# l4fame-node		master			master		n/a
-#						master
-#						YES
-# libfam-atomic		debian,master,upstream	debian,master	All three
-#						debian
-#						YES
-# nvml			debian,master,upstream	debian		All three
-#						debian
-#						YES
-# tm-hello-world	debian,master		debian		debian,master
-#						debian
-#						YES
-# tm-libfuse		debian,hp_l4tm,upstream	debian,hp_l4tm	All three
-#						debian
-#						YES
-# tm-librarian		debian,upstream		debian		upstream
-#						merged master
-#						YES
-# tm-manifesting	master			master		master
-#						master
-#						YES
-
-# Build happens from wherever the repo is sitting (--git-ignore-new = True).
-# Position the repo appropriately.  <package.version>.orig.tar.gz "source"
-# is specified in each repo's debian/gbp.conf, as are the upstream-branch
-# and debian-branch.
 
 ###########################################################################
 # Only one branch with source: what a concept.  FIXME: add detection
@@ -469,7 +440,6 @@ apt-get install -y libssl-dev bc kmod cpio pkg-config build-essential
 cd $ALLGITS
 rock_and_roll
 RARRET=$?
-cp $GBPOUT/*.deb $DEBS
 
 #--------------------------------------------------------------------------
 
