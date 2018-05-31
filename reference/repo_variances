@@ -1,0 +1,35 @@
+###########################################################################
+# The packages of interest all did it differently.  Welcome to Linux.
+
+# Package		Branches of concern	"debian" dir/	src in
+#						build from/
+#						private gbp.conf
+
+# Emulation		debian,master		n/a		debian,master
+#						master
+#						no
+# l4fame-manager	master			master		n/a
+#						master
+#						YES
+# l4fame-node		master			master		n/a
+#						master
+#						YES
+# libfam-atomic		debian,master,upstream	debian,master	All three
+#						debian
+#						YES
+# nvml			debian,master,upstream	debian		All three
+#						debian
+#						YES
+# tm-hello-world	debian,master		debian		debian,master
+#						debian
+#						YES
+# tm-libfuse		debian,hp_l4tm,upstream	debian,hp_l4tm	All three
+#						debian
+#						YES
+# tm-librarian		debian,upstream		debian		upstream
+#						merged master
+#						YES
+# tm-manifesting	master			master		master
+#						master
+#						YES
+
