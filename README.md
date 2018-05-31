@@ -68,9 +68,15 @@ To reconnect to the container run `docker attach l4fame-builder`
 | `--privileged` | Gives the container enough privileges to enter a chroot and build arm64 packages. |
 | `-v L4FAME_BUILD:/build` | Creates a new Docker volume named L4FAME_BUILD to hold packages and temporary files as they are being built. |
 | `-v ~/theDebs:/debs` | Mounts a local folder ($HOME/theDebs) to store the finished packages. |
-| `-e cores=number_of_cores` | **Optional Flag** Sets the number of cores used to compile packages. Replace `number_of_cores` with an integer value. If this flag is left off the container will automatically use half the available cpu cores. |
-| `-e http_proxy=http://ProxyAddress:PORT`<br>`-e https_proxy=https://ProxyAddress:PORT` | **Optional Flag** Sets `http_proxy` and `https_proxy` environment variables inside the container. These flags are only needed if your host system is behind a firewall. |
-| `-e SUPPRESSAMD=true|false<br>`-e SUPPRESSARM=true|false` | **Optional Flag** By default build packages for both AMD/x86_64 and ARM64 |
+
+Some environment variables can be added to the "docker run" command with the "-e variable=value" syntax:
+
+| Variable name | Purpose |
+| CORES | Integer; sets the number of cores used to compile packages. The default value is half the available cpu cores. |
+| http_proxy,<br>https_proxy | http\[s\]://ProxyAddress:PORT standard form |
+| SUPPRESSAMD | Default is "false", may be set "true", to control building of packages for AMD/x86_64 |
+| SUPPRESSARM | Default is "false", may be set "true", to control building of packages for AMD/x86_64 |
+| SUPPRESSKERNEL | Default is "false", may be set "true", to control building of just the kernel |
 
 To completely remove the container:
 
