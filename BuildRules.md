@@ -1,30 +1,14 @@
 ## Instructions for Building Individual Packages
 
-Each package referenced in builder.bash can be built individually using the following steps:
+Each package referenced in builder.bash can be built individually using git-buildpackage (gbp).  Every repo contains a branch with the Debian directive/control files in the "debian" directory.  Unfortunately, each repo uses a slightly different branching scheme.  The main idea is to install prerequisite packages, clone the repo, checkout the appropriate branch, and run "gbp buildpackage".  While the intent of all Debian packaging is to create artifacts suitable for submission to debian.org, these repos are only interested in creating binary .deb package files.  As such, certain liberties and shortcuts may have been taken.
+
+Every repo has a dedicated config file named "debian/gbp.conf".   By default every repo will use scratch space in /tmp/gpb4hpe, which is also where you'll find completed packaging.   To change this, add the option "--git-export-dir=some/where/else".  Other options in the gbp.conf file are beyond the scope of this discussion, however a [very useful GBP art object can be seen here](https://honk.sigxcpu.org/projects/git-buildpackage/manual-html/gbp.intro.html#gbp.repository)
 
 ---
 ### Setup and Configuration 
-Install `git-buildpackage`, it is required for building all packages.
+Install `git-buildpackage`
 ```shell
-apt-get install git-buildpackage
-```
-
-Add the following configuration to `~/.devscripts`.
-```shell
-DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc -i -b"
-```
-
-Add the following configuration to `~/.gbp.conf`.
-```shell
-[DEFAULT]
-cleaner = fakeroot debian/rules clean
-ignore-new = True
-
-[buildpackage]
-export-dir = ../build-area/
-
-[git-import-orig]
-dch = False
+$ sudo apt-get install git-buildpackage
 ```
 
 ---
@@ -42,6 +26,8 @@ dch = False
 
 ---
 ### nvml
+
+nvml is a 2016 snapshot of the [Intel NVML/PMEM project](http://pmem.io/2017/12/11/NVML-is-now-PMDK.html), specifically the libpmem library (the lowest in their stack).  Since then the library has been rechristened [PMDK - Persistent Memory Dev Kit](http://pmem.io/pmdk/).  The FAM project here, nvml, is stale with respect to that effort.
 **Packages**
 ```shell
 libpmem_[version].deb 
@@ -49,70 +35,38 @@ libpmem-dev_[version].deb
 ```
 **Build Requirements** 
 ```shell
-apt-get install uuid-dev 
+$ sudo apt-get install uuid-dev 
 ```
+
 **Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/nvml.git).
+1. [git clone https://github.com/FabricAttachedMemory/nvml.git](https://github.com/FabricAttachedMemory/nvml.git).
 2. Checkout `upstream`, then checkout `debian`.
 3. Build with 
 ```shell
 gbp buildpackage
 ```
 
-**Note**
-If the build fails with the following error,
-```shell
-gbp:error: 'debuild -i -I' failed: it exited with 29
-```
-It is because one of the sub-folders in `../build-area/` is misnamed. To fix this error, run the following to build with a new `rules` file.
-```shell
-read -r -d '' rule<<"EOF"
-#!/usr/bin/make -f
-%:
-\tdh \$@
-
-override_dh_auto_install:
-\tdh_auto_install -- prefix=/usr
-
-override_dh_install:
-\tmkdir -p debian/tmp/usr/share/nvml/
-\tcp utils/nvml.magic debian/tmp/usr/share/nvml/
-\t-mv debian/tmp/usr/lib64 debian/tmp/usr/lib
-\tdh_install
-
-override_dh_auto_test:
-\techo "We do not test this code yet."
-
-override_dh_clean:
-\tfind src/ -name 'config.status' -delete
-\tfind src/ -name 'config.log' -delete
-\tdh_clean
-EOF
-echo -e "$rule" > /tmp/rules
-chmod +x /tmp/rules
-
-gbp buildpackage --git-prebuild='mv /tmp/rules debian/rules'
-```
-
 ---
 ### tm-librarian
+The Librarian suite breaks with Debian tradition in that it only has one branch with source in it ("upstream"), along with another branch ("debian") containing only the Debian directive files.  The use must merge these remote branches into a local-only "master" branch from which the packages can be built.
 **Packages**
 ```shell
 tm-librarian_[version].deb 
 python3-tm-librarian_[version].deb 
 tm-lfs_[version].deb 
-tm-utils_[version].deb 
-tm-lmp_[version].deb
 ```
 **Build Requirements** 
 ```shell
-apt-get install dh-exec
+$ sudo apt-get install dh-exec
 ```
 **Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/tm-librarian.git).
-2. Checkout `upstream`, then checkout `debian`.
-3. Build with 
+[git clone https://github.com/FabricAttachedMemory/tm-librarian.git](https://github.com/FabricAttachedMemory/tm-librarian.git).
 ```shell
+[git clone https://github.com/FabricAttachedMemory/tm-librarian.git](https://github.com/FabricAttachedMemory/tm-librarian.git).
+git checkout upstream
+git checkout debian
+git checkout --orphan master
+git merge upstream
 gbp buildpackage
 ```
 
