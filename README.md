@@ -63,19 +63,21 @@ To reconnect to the container run `docker attach l4fame-builder`
 
 | Docker Flag | Explanation |
 | ----------- | ----------- |
-| `-t` | Allocates and attaches a pseudo-tty, this allows the container to be killed (ctl-C) or sent to the background. |
-| `--name l4fame-build` | Names the container "l4fame-build" to simplify subsequent runs. |
-| `--privileged` | Gives the container enough privileges to enter a chroot and build arm64 packages. |
-| `-v L4FAME_BUILD:/build` | Creates a new Docker volume named L4FAME_BUILD to hold packages and temporary files as they are being built. |
-| `-v ~/theDebs:/debs` | Mounts a local folder ($HOME/theDebs) to store the finished packages. |
+| -t | Allocates and attaches a pseudo-tty, allowing the container to be killed (ctl-C) or sent to the background. |
+| --name l4fame-build | Names the container "l4fame-build" to simplify subsequent runs. |
+| --privileged | Gives the container enough privileges to enter a chroot and build arm64 packages. |
+| -v L4FAME_BUILD:/build | Creates a new Docker volume named L4FAME_BUILD to hold packages and temporary files as they are being built. |
+| -v ~/theDebs:/debs | Mounts a local folder ($HOME/theDebs) to store the finished packages. |
 
 Some environment variables can be added to the "docker run" command with the "-e variable=value" syntax:
 
+
 | Variable name | Purpose |
+| ------------- | ------- |
 | CORES | Integer; sets the number of cores used to compile packages. The default value is half the available cpu cores. |
 | http_proxy,<br>https_proxy | http\[s\]://ProxyAddress:PORT standard form |
 | SUPPRESSAMD | Default is "false", may be set "true", to control building of packages for AMD/x86_64 |
-| SUPPRESSARM | Default is "false", may be set "true", to control building of packages for AMD/x86_64 |
+| SUPPRESSARM | Default is "false", may be set "true", to control building of packages for ARM (AARCH64) |
 | SUPPRESSKERNEL | Default is "false", may be set "true", to control building of just the kernel |
 
 To completely remove the container:
