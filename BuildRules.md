@@ -6,9 +6,9 @@ Every repo has a dedicated config file named "debian/gbp.conf".   By default eve
 
 ---
 ### Setup and Configuration 
-Install `git-buildpackage`
+Install prerequisites
 ```shell
-$ sudo apt-get install git-buildpackage
+$ sudo apt-get install git git-buildpackage uuid-dev dh-exec libselinux-dev
 ```
 
 ---
@@ -21,7 +21,6 @@ $ sudo apt-get install git-buildpackage
   * [tm-hello-world](#tm-hello-world)
   * [tm-libfuse](#tm-libfuse)
   * [libfam-atomic](#libfam-atomic)
-  * [fame](#fame)
   * [linux-kernel](#linux-kernel)
 
 ---
@@ -39,49 +38,49 @@ $ sudo apt-get install uuid-dev
 ```
 
 **Build Process**
-1. [git clone https://github.com/FabricAttachedMemory/nvml.git](https://github.com/FabricAttachedMemory/nvml.git).
-2. Checkout `upstream`, then checkout `debian`.
-3. Build with 
 ```shell
-gbp buildpackage
+$ git clone https://github.com/FabricAttachedMemory/nvml.git
+$ cd nvml
+$ git checkout upstream && git checkout debian --
+$ gbp buildpackage
 ```
 
 ---
 ### [tm-librarian](https://github.com/FabricAttachedMemory/tm-librarian.git)
-The Librarian suite breaks with Debian tradition in that it only has one branch with source in it ("upstream"), along with another branch ("debian") containing only the Debian directive files.  The use must merge these remote branches into a local-only "master" branch from which the packages can be built.
+The Librarian suite breaks with Debian tradition in that it only has one branch with source in it ("upstream"), along with another branch ("debian") containing only the Debian directive files.  The user must merge these remote branches into a local-only "master" branch from which the packages can be built.
 **Packages**
-```shell
 tm-librarian_[version].deb 
 python3-tm-librarian_[version].deb 
 tm-lfs_[version].deb 
-```
+
 **Build Requirements** 
-```shell
-$ sudo apt-get install dh-exec
-```
+dh-exec
+
 **Build Process**
 ```shell
-git clone https://github.com/FabricAttachedMemory/tm-librarian.git](https://github.com/FabricAttachedMemory/tm-librarian.git
-git checkout debian
-git checkout --orphan master
-git merge upstream
+git clone https://github.com/FabricAttachedMemory/tm-librarian.git
+cd tm-librarian
+git checkout upstream && git checkout debian --  # Realize local branches
+git checkout --orphan master                     # Fork a branch from "debian", then switch to it
+git merge upstream                               # Into newly-create "master" branch
 gbp buildpackage
 ```
 
 ---
-### [tm-manifesting](https://github.com/keith-packard/tm-manifesting.git)
+### [tm-manifesting](https://github.com/FabricAttachedMemory/tm-manifesting.git)
 **Packages**
-```shell
 tm-manifesting_[version].deb
-```
+
 **Build Requirements** 
-```shell
-$ sudo apt-get install dh-exec
-```
+dh-exec
+
 **Build Process**
-# git clone https://github.com/keith-packard/tm-manifesting.git
-# cd tm-manifesting
-# gbp buildpackage
+```shell
+$ git clone https://github.com/FabricAttachedMemory/tm-manifesting.git
+$ cd tm-manifesting
+$ git checkout master
+$ gbp buildpackage
+```
 
 ---
 ### l4fame-node
@@ -90,43 +89,40 @@ $ sudo apt-get install dh-exec
 l4fame-node_[version].deb
 ```
 **Build Requirements**
-```shell
-# no package requirements
-```
+Nothing extra
+
 **Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/l4fame-node.git).
-2. Build with
 ```shell
-gbp buildpackage
+$ git clone https://github.com/FabricAttachedMemory/l4fame-node.git
+$ cd l4fame-node
+$ git checkout master
+$ gbp buildpackage
 ```
 
 ---
 ### l4fame-manager
 **Packages**
-```shell
 l4fame-manager_[version].deb
-```
+
 **Build Requirements**
-```shell
-# no package requirements
-```
+Nothing extra
+
 **Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/l4fame-manager.git).
-2. Build with 
 ```shell
-gbp buildpackage
+$ git clone https://github.com/FabricAttachedMemory/l4fame-manager.git
+$ cd l4fame-manager
+$ git checkout master
+$ gbp buildpackage
 ```
 
 ---
 ### tm-hello-world
 **Packages**
-```shell
 tm-hello-world_[version].deb
-```
+
 **Build Requirements**
-```shell
-# no package requirements
-```
+Nothing extra
+
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/tm-hello-world.git).
 2. Checkout `debian`.
@@ -164,8 +160,9 @@ libfam-atomic2-tests_[version].deb
 ```
 **Build Requirements**
 ```shell
-apt-get install pkg-config autoconf-archive asciidoc libxml2-utils xsltproc docbook-xsl docbook-xml
+$ sudo apt-get install pkg-config autoconf-archive asciidoc libxml2-utils xsltproc docbook-xsl docbook-xml
 ```
+
 **Build Process**
 1. Clone [this repository](https://github.com/FabricAttachedMemory/libfam-atomic.git).
 2. Checkout `upstream`, then checkout `debian`.
@@ -175,32 +172,14 @@ gbp buildpackage --git-upstream-tree=branch
 ```
 
 ---
-### fame 
-**Packages**
-```shell
-fame_[version].deb
-```
-**Build Requirements**
-```shell
-# no package requirements
-```
-**Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/Emulation.git).
-2. Checkout `debian`.
-3. Build with
-```shell
-gbp buildpackage --git-upstream-branch=master
-```
-
----
 ### linux-kernel 
 **Packages**
 ```shell
-linux-firmware-image-4.8.0-l4fame+_[version].deb
-linux-headers-4.8.0-l4fame+_[version].deb 
+linux-firmware-image-4.14y_[version].deb
+linux-headers-4.14y_[version].deb 
 linux-libc-dev_[version].deb 
-linux-image-4.8.0-l4fame+_[version].deb 
-linux-image-4.8.0-l4fame+-dbg_[version].deb
+linux-image-4.14y_[version].deb 
+linux-image-4.14y-dbg_[version].deb
 ```
 **Build Requirements**
 ```shell
@@ -212,4 +191,3 @@ apt-get install build-essential bc libssl-dev
 ```shell
 make deb-pkg
 ```
-
