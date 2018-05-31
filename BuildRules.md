@@ -2,11 +2,13 @@
 
 Each package referenced in builder.bash can be built individually using git-buildpackage (gbp).  Every repo contains a branch with the Debian directive/control files in the "debian" directory.  Unfortunately, each repo uses a slightly different branching scheme.  The main idea is to install prerequisite packages, clone the repo, checkout the appropriate branch, and run "gbp buildpackage".  While the intent of all Debian packaging is to create artifacts suitable for submission to debian.org, these repos are only interested in creating binary .deb package files.  As such, certain liberties and shortcuts may have been taken.
 
-Every repo has a dedicated config file named "debian/gbp.conf".   By default every repo will use scratch space in /tmp/gpb4hpe, which is also where you'll find completed packaging.   To change this, add the option "--git-export-dir=some/where/else".  Other options in the gbp.conf file are beyond the scope of this discussion, however a [very useful GBP art object can be seen here](https://people.debian.org/~stapelberg/2016/11/25/build-tools.html).
+Every repo has a dedicated config file named "debian/gbp.conf".   By default every repo will use scratch space in /tmp/gpb4hpe, which is also where you'll find completed packaging.   To change this, add the option "--git-export-dir=some/where/else".  Other options in the gbp.conf file are beyond the scope of this discussion, however this material helped a lot:
+
+* [very useful GBP art object](https://people.debian.org/~stapelberg/2016/11/25/build-tools.html)
 
 ---
 ### Setup and Configuration 
-Install prerequisites
+Install common prerequisites
 ```shell
 $ sudo apt-get install git git-buildpackage uuid-dev dh-exec libselinux-dev
 ```
@@ -33,9 +35,7 @@ libpmem_[version].deb
 libpmem-dev_[version].deb
 ```
 **Build Requirements** 
-```shell
-$ sudo apt-get install uuid-dev 
-```
+uuid-dev 
 
 **Build Process**
 ```shell
@@ -124,70 +124,68 @@ tm-hello-world_[version].deb
 Nothing extra
 
 **Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/tm-hello-world.git).
-2. Checkout `debian`.
-3. Build with
 ```shell
-gbp buildpackage
+$ git clone https://github.com/FabricAttachedMemory/tm-hello-world.git
+$ cd tm-hello-world
+$ git checkout debian --
+$ gbp buildpackage
 ```
 
 ---
 ### tm-libfuse
 **Packages**
-```shell
 tm-libfuse_[version].deb
-```
+
 **Build Requirements**
-```shell
-apt-get install libselinux-dev
-```
+libselinux-dev
+
 **Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/tm-libfuse.git).
-2. Checkout `upstream`, then checkout `debian`.
-3. Build with
 ```shell
-gbp buildpackage
+$ git clone https://github.com/FabricAttachedMemory/tm-libfuse.git
+$ cd tm-libfuse
+$ git checkout upstream && git checkout debian --
+$ gbp buildpackage
 ```
 
 ---
 ### libfam-atomic
 **Packages**
-```shell
 libfam-atomic2_[version].deb 
 libfam-atomic2-dev_[version].deb 
 libfam-atomic2-dbg_[version].deb 
 libfam-atomic2-tests_[version].deb
-```
+
 **Build Requirements**
-```shell
-$ sudo apt-get install pkg-config autoconf-archive asciidoc libxml2-utils xsltproc docbook-xsl docbook-xml
-```
+pkg-config autoconf-archive asciidoc libxml2-utils xsltproc docbook-xsl docbook-xml
 
 **Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/libfam-atomic.git).
-2. Checkout `upstream`, then checkout `debian`.
-3. Build with
 ```shell
-gbp buildpackage --git-upstream-tree=branch
+$ git clone https://github.com/FabricAttachedMemory/libfam-atomic.git
+$ cd libfam-atomic
+$ git checkout upstream && git checkout debian --
+$ gbp buildpackage --git-upstream-tree=branch
 ```
 
 ---
 ### linux-kernel 
+The kernel has its own mechanism for building a Debian package and does not use gbp.
 **Packages**
-```shell
 linux-firmware-image-4.14y_[version].deb
 linux-headers-4.14y_[version].deb 
 linux-libc-dev_[version].deb 
 linux-image-4.14y_[version].deb 
 linux-image-4.14y-dbg_[version].deb
-```
+
 **Build Requirements**
-```shell
-apt-get install build-essential bc libssl-dev
-```
+build-essential bc libssl-dev
+
 **Build Process**
-1. Clone [this repository](https://github.com/FabricAttachedMemory/linux-l4fame.git).
-2. Build with
 ```shell
-make deb-pkg
+$ git clone https://github.com/FabricAttachedMemory/linux-l4fame.git
+$ cd linux-l4fame
+$ git checkout mdc/linux-4.14.y
+$ cp config.amd64-fame .config
+$ scripts/config --disable DEBUG_INFO   # Suppress debug kernel
+$ rm -f .version
+$ make -j50 deb-pkg  # Replace "50" with however many cores you have to spare
 ```
