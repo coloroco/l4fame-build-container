@@ -47,7 +47,7 @@ gbp buildpackage
 ```
 
 ---
-### tm-librarian
+### [tm-librarian](https://github.com/FabricAttachedMemory/tm-librarian.git)
 The Librarian suite breaks with Debian tradition in that it only has one branch with source in it ("upstream"), along with another branch ("debian") containing only the Debian directive files.  The use must merge these remote branches into a local-only "master" branch from which the packages can be built.
 **Packages**
 ```shell
@@ -60,10 +60,8 @@ tm-lfs_[version].deb
 $ sudo apt-get install dh-exec
 ```
 **Build Process**
-[git clone https://github.com/FabricAttachedMemory/tm-librarian.git](https://github.com/FabricAttachedMemory/tm-librarian.git).
 ```shell
-[git clone https://github.com/FabricAttachedMemory/tm-librarian.git](https://github.com/FabricAttachedMemory/tm-librarian.git).
-git checkout upstream
+git clone https://github.com/FabricAttachedMemory/tm-librarian.git](https://github.com/FabricAttachedMemory/tm-librarian.git
 git checkout debian
 git checkout --orphan master
 git merge upstream
@@ -71,21 +69,19 @@ gbp buildpackage
 ```
 
 ---
-### tm-manifesting
+### [tm-manifesting](https://github.com/keith-packard/tm-manifesting.git)
 **Packages**
 ```shell
 tm-manifesting_[version].deb
 ```
 **Build Requirements** 
 ```shell
-apt-get install dh-exec
+$ sudo apt-get install dh-exec
 ```
 **Build Process**
-1. Clone [this repository](https://github.com/keith-packard/tm-manifesting.git).
-2. Build with 
-```shell
-gbp buildpackage --git-upstream-branch=master --git-upstream-tree=branch
-```
+# git clone https://github.com/keith-packard/tm-manifesting.git
+# cd tm-manifesting
+# gbp buildpackage
 
 ---
 ### l4fame-node
