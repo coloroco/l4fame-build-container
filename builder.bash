@@ -257,11 +257,14 @@ function build_kernel() {
     log "KERNEL BUILD @ `date`"
     if inContainer; then
         cp config.amd64-fame .config
-    else
+    else	# in chroot
         cp config.arm64-mft .config
-    	# Already set in amd, need it for arm January 2018
-    	scripts/config --set-str LOCALVERSION "-l4fame"
     fi
+
+    # Already set in amd, need it for arm January 2018.  However the arch-
+    # independent l4fame-node package hardcodes for -l4fame.  Then I don't
+    # need to change the .configs in the kernel source.
+    scripts/config --set-str LOCALVERSION "-l4fame"
 
     # Suppress debug kernel - save a few minutes and 500M of space
     # https://superuser.com/questions/925079/compile-linux-kernel-deb-pkg-target-without-generating-dbg-package
