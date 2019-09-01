@@ -27,6 +27,9 @@ Clone and build the repository with:
 git clone git@github.com:FabricAttachedMemory/l4fame-build-container.git
 cd l4fame-build-container && docker build --tag l4fame-build .
 ```
+###### NOTE
+If getting "Access Denied" error, than probably docker proxy settings needs to be set:
+https://docs.docker.com/engine/admin/systemd/#start-automatically-at-system-boot
 
 If you're behind a firewall and have the standard environment variables set, add
 
